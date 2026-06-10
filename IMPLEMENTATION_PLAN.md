@@ -77,6 +77,7 @@ Cập nhật lần cuối: 2026-06-10
 - [x] M9.8 Settings UI (vault/git/api keys/plugins/theme)
 - [x] M9.9 Theme Obsidian-like (dark/light)
 - [x] M9.10 Navigation back/forward (toolbar ←/→ trên mọi view, history stack)
+- [x] M9.11 Search: filter/sort (match case, collapse, more context, sort) + sticky query box
 
 ## Phase 10 — Docker & docs — FR-9
 - [x] M10.1 Multi-stage `Dockerfile` (web build → server runtime, git+git-lfs)
@@ -321,3 +322,11 @@ Cập nhật lần cuối: 2026-06-10
   nhánh forward, bỏ qua khi đang replay nhờ cờ `navByHistory`). View-header giờ render cho MỌI view
   (trước chỉ markdown) với 2 nút ←/→ góc trái, disabled+mờ khi hết chỗ lùi/tới; Graph view cũng có
   toolbar. Icon thêm arrow-left/arrow-right. typecheck cả 2 workspace + build web sạch.
+- 2026-06-10: Search panel thêm filter/sort + sticky (M9.11). Khung query (input + nút match-case
+  "Aa" + clear + options) gộp 1 box bo viền, `.search-head` `position: sticky; top:0` trong
+  `.sidebar-body` → KHÔNG trôi khi cuộn kết quả (fix khiếu nại). Options panel (toggle qua nút
+  sliders): Collapse results (ẩn snippet), Show more context (bỏ line-clamp). Dropdown Sort:
+  Relevance (mặc định = thứ tự server) / File name A→Z / Z→A / Path — sort client-side. Match case
+  lọc client theo free-text (bỏ operator tag:/path:). Nâng limit 50→100. Lưu ý: sort theo Modified/
+  Created time CHƯA làm — search index không lưu mtime/ctime, cần thêm field server + reindex.
+  typecheck + build web sạch. Chưa verify live (browser profile CDP đang bị chiếm).
