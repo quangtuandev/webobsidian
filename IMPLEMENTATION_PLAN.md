@@ -259,6 +259,12 @@ Cập nhật lần cuối: 2026-06-11 (Phase 19 — Mobile UI)
 - [x] M19.6 Viewport `viewport-fit=cover` + `interactive-widget=resizes-content` + safe-area insets;
       verify trên Chrome device emulation 390×844
 
+## Phase 20 — Graph node search & jump (theo yêu cầu người dùng, PRD 0.5)
+- [x] M20.1 Ô "Find node…" nổi trên Graph view: gõ keywords → danh sách node khả dĩ (match
+      label/path mọi từ, rank tag trước hết > prefix > label > path + degree, top 50); click hoặc Enter (kết quả
+      đầu) → camera bay (pan+zoom lerp 15%/frame, zoom tối thiểu 2×) tới node + highlight kiểu
+      hover (accent + dim phần không liên kết) tới khi di chuột; Esc đóng; wheel/drag hủy fly
+
 ### Nhật ký tiến độ
 - 2026-06-11 (Phase 19 — Mobile UI): làm mobile-friendly cho smartphone cảm ứng (tham chiếu Obsidian
   Mobile). `useIsMobile` (matchMedia 768px) + state cục bộ `mobileDrawer` (KHÔNG persist/broadcast →
@@ -626,3 +632,10 @@ Cập nhật lần cuối: 2026-06-11 (Phase 19 — Mobile UI)
   khi đổi forces (app post alpha .3); thêm hook window.__graphCam cho automated UI test.
   Verify trên Chrome vault thật 5.9k notes: khối cầu + vòng orphan tổ ong, label hiện đúng
   ngưỡng scale ~0.5–1, hover dim chuẩn, console sạch, typecheck + build sạch.
+- 2026-06-11: Phase 20 (PRD 0.5) — Graph "Find node": ô search nổi góc trên-trái canvas, keyword
+  match trên node đang hiển thị (label/path, AND mọi từ, rank tag-first>prefix>label>path+degree, top 50,
+  kind tô màu tag xanh/attachment vàng/unresolved mờ + path phụ); click/Enter → flyTo: camera
+  lerp pan+zoom 15%/frame (chung nhịp updateZoom Obsidian) về node ở scale ≥2, setHover highlight
+  accent + dim không-liên-kết tới khi di chuột; wheel/drag hủy fly; Esc/clear đóng list. Verify
+  CDP vault thật: gõ "docker" 50 kết quả đúng rank, click bay tới node centered scale 2.0, query
+  tự xoá, console sạch. Typecheck + build sạch. PRD bump 0.5 (FR-2).

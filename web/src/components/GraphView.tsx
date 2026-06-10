@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, type GraphSettings } from '../lib/store';
 import { api } from '../lib/api';
 import Icon from './Icon';
@@ -123,6 +123,9 @@ export default function GraphView() {
   // and at the viewport center when zooming out.
   const zoomTarget = useRef(1);
   const zoomAnchor = useRef<{ x: number; y: number } | null>(null);
+  // "Find node" jump: while set, the camera flies (pan+zoom lerp) to center
+  // this node; any manual wheel/drag cancels the flight.
+  const flyNode = useRef<GNode | null>(null);
   const adjRef = useRef<Map<GNode, Set<GNode>>>(new Map());
   const hover = useRef<GNode | null>(null);
   const drag = useRef<{ px: number; py: number; moved: number } | null>(null);
@@ -136,6 +139,35 @@ export default function GraphView() {
 
   const [rawVersion, setRawVersion] = useState(0);
   const [sceneVersion, setSceneVersion] = useState(0);
+  const [jumpQ, setJumpQ] = useState(''); // "Find node" query
+
+  // Keyword match over the nodes currently on the graph: every word must appear
+  // in the label or the path; tag nodes always rank first, then
+  // prefix > label > path, then by degree.
+  const jumpResults = useMemo(() => {
+    const words = jumpQ.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const scored: { n: GNode; s: number }[] = [];
+    for (const n of nodesRef.current) {
+      const label = n.label.toLowerCase();
+      const bare = label.startsWith('#') ? label.slice(1) : label; // tags: prefix-match without '#'
+      const id = n.id.toLowerCase();
+      let ok = true;
+      let s = 0;
+      for (const w of words) {
+        if (label.includes(w)) s += bare.startsWith(w) ? 3 : 2;
+        else if (id.includes(w)) s += 1;
+        else {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) scored.push({ n, s: (n.kind === 'tag' ? 1000 : 0) + s * 10 + Math.min(n.deg, 9) });
+    }
+    scored.sort((a, b) => b.s - a.s || a.n.label.length - b.n.label.length);
+    return scored.slice(0, 50).map((x) => x.n);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpQ, sceneVersion]);
   const [panelOpen, setPanelOpen] = useState(false); // Obsidian default: collapsed, cog only
   const [stats, setStats] = useState({ total: 0, shown: 0, orphans: 0 });
   const [buildError, setBuildError] = useState<string | null>(null);
@@ -220,6 +252,34 @@ export default function GraphView() {
     return true;
   };
 
+  // Fly-to-node animation: ease the scale toward zoomTarget and the pan toward
+  // centering the node, with the same 15%/frame lerp as Obsidian's updateZoom.
+  const stepFly = (): boolean => {
+    const n = flyNode.current;
+    if (!n) return false;
+    const v = cam.current;
+    const dpr = dprNow();
+    const wrap = wrapRef.current;
+    const W = wrap?.clientWidth || 900;
+    const H = wrap?.clientHeight || 600;
+    const t = (zoomTarget.current = Math.min(SCALE_MAX, Math.max(SCALE_MIN, zoomTarget.current)));
+    let e = v.k * dpr;
+    e = e * 0.85 + t * 0.15;
+    v.k = e / dpr;
+    const tx = W / 2 - (n.x ?? 0) * v.k;
+    const ty = H / 2 - (n.y ?? 0) * v.k;
+    v.x = v.x * 0.85 + tx * 0.15;
+    v.y = v.y * 0.85 + ty * 0.15;
+    const done =
+      Math.abs(v.x - tx) < 0.5 && Math.abs(v.y - ty) < 0.5 && (e > t ? e / t : t / e) - 1 < 0.01;
+    if (done) {
+      v.x = tx;
+      v.y = ty;
+      flyNode.current = null;
+    }
+    return !done;
+  };
+
   // Obsidian's hover fade: nodes not linked to the highlighted node ease toward
   // alpha 0.2 (mQ lerp, 90% retained per frame). Returns true while animating.
   const stepFade = (): boolean => {
@@ -250,7 +310,7 @@ export default function GraphView() {
   const doRender = () => {
     const p = pixi.current;
     if (!p) return;
-    const zooming = stepZoom();
+    const zooming = flyNode.current ? stepFly() : stepZoom();
     const fading = stepFade();
     const { x, y, k } = cam.current;
     p.world.position.set(x, y);
@@ -808,6 +868,7 @@ export default function GraphView() {
       let dy = e.deltaY;
       if (e.deltaMode === 1) dy *= 40;
       else if (e.deltaMode === 2) dy *= 800;
+      flyNode.current = null; // manual zoom cancels a fly-to-node in progress
       const t = Math.min(SCALE_MAX, Math.max(SCALE_MIN, zoomTarget.current * Math.pow(1.5, -dy / 120)));
       zoomTarget.current = t;
       if (t < cam.current.k * dprNow()) {
@@ -865,6 +926,16 @@ export default function GraphView() {
     scheduleRender(false);
   };
 
+  // "Find node" jump: fly the camera to the node (zoom in to at least 2× device
+  // scale) and light it up like a hover until the user moves the mouse.
+  const flyTo = (n: GNode) => {
+    zoomTarget.current = Math.min(SCALE_MAX, Math.max(2, devScale(cam.current.k)));
+    flyNode.current = n;
+    userMoved.current = true;
+    setHover(n);
+    scheduleRender(false);
+  };
+
   const onDown = (e: React.MouseEvent) => {
     drag.current = { px: e.clientX, py: e.clientY, moved: 0 };
   };
@@ -877,6 +948,7 @@ export default function GraphView() {
       drag.current.moved += Math.abs(dx) + Math.abs(dy);
       cam.current.x += dx;
       cam.current.y += dy;
+      flyNode.current = null; // manual pan cancels a fly-to-node in progress
       userMoved.current = true;
       scheduleRender(false);
     } else {
@@ -908,6 +980,42 @@ export default function GraphView() {
             setHover(null);
           }}
         />
+        <div className="graph-node-search">
+          <Icon name="search" size={14} />
+          <input
+            value={jumpQ}
+            placeholder="Find node…"
+            spellCheck={false}
+            onChange={(e) => setJumpQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && jumpResults.length) {
+                flyTo(jumpResults[0]);
+                setJumpQ('');
+              } else if (e.key === 'Escape') {
+                setJumpQ('');
+              }
+            }}
+          />
+          {jumpQ.trim() !== '' && (
+            <div className="graph-node-results">
+              {jumpResults.length === 0 && <div className="graph-node-empty">No matching nodes</div>}
+              {jumpResults.map((n) => (
+                <button
+                  key={n.id}
+                  className="graph-node-result"
+                  onClick={() => {
+                    flyTo(n);
+                    setJumpQ('');
+                  }}
+                >
+                  <span className={`gnr-label gnr-${n.kind}`}>{n.label}</span>
+                  {n.kind === 'note' && n.id !== n.label && <span className="gnr-path">{n.id}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="graph-hint">
           {stats.shown} / {stats.total} notes · {stats.orphans} orphans · scroll to zoom · drag to pan · click a tag to search
         </div>

@@ -1,7 +1,11 @@
 # PRD — WebObsidian
 
 > Product Requirements Document
-> Phiên bản: 0.4 · Cập nhật: 2026-06-11 · Trạng thái: Draft
+> Phiên bản: 0.5 · Cập nhật: 2026-06-11 · Trạng thái: Draft
+> Changelog 0.5: Graph (FR-2) thêm tìm node theo keywords — ô search nổi trên Graph view, gõ keywords
+> hiện danh sách note/tag khả dĩ (match label/path, tag luôn xếp trước, sau đó prefix > label > path + degree), click
+> (hoặc Enter = kết quả đầu) bay camera (fly animation pan+zoom mượt) tới node và highlight node đó
+> (node sáng màu accent, phần không liên kết mờ đi) tới khi di chuột; Esc đóng danh sách.
 > Changelog 0.4: thêm FR-11 (Mobile / responsive UI cho smartphone màn hình cảm ứng) — sidebar trái/phải
 > thành drawer overlay trượt (hamburger + edge-swipe + backdrop), workspace full-width, mobile editing
 > toolbar trên bàn phím (bold/italic/heading/list/checkbox/link/…), touch target ≥44px, safe-area insets.
@@ -119,6 +123,9 @@ webobsidian/
   - Graph view: Copy screenshot (PNG vào clipboard), Close tab.
   - Split pane hỗ trợ 2 hướng: right (cạnh phải) và down (bên dưới); hướng split persist trong uistate.
 - Graph view (lực đẩy, từ wikilinks).
+  - Tìm node trên graph: ô search nổi (góc trên-trái), gõ keywords → danh sách node khả dĩ
+    (note/tag/attachment đang hiển thị trên graph); click hoặc Enter → camera bay (pan+zoom mượt)
+    tới node, node được highlight kiểu hover (accent + dim phần không liên kết) tới khi di chuột.
 
 ### FR-3 · Login gate
 - Lần đầu chạy: set master password.

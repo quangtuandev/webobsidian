@@ -1060,3 +1060,83 @@ button { font-family: inherit; }
   transition: var(--transition);
 }
 .format-toolbar button:hover { background: var(--bg-modifier-hover); color: var(--text-normal); }
+
+/* Graph "Find node" search (floating, top-left of the graph canvas) */
+.graph-node-search {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 240px;
+  padding: 5px 9px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color, var(--bg-modifier-border, #ddd));
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  color: var(--text-muted);
+}
+.graph-node-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-normal);
+}
+.graph-node-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color, var(--bg-modifier-border, #ddd));
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+}
+.graph-node-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.graph-node-result:hover {
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
+}
+.gnr-label {
+  font-size: 13px;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.gnr-label.gnr-tag { color: #3aa757; }
+.gnr-label.gnr-unresolved { color: var(--text-faint); }
+.gnr-label.gnr-attachment { color: #e0a008; }
+.gnr-path {
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.graph-node-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
