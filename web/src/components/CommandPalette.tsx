@@ -38,6 +38,7 @@ export default function CommandPalette() {
   const toggleBookmark = useStore((s) => s.toggleBookmark);
   const openDailyNote = useStore((s) => s.openDailyNote);
   const createNote = useStore((s) => s.createNote);
+  const notify = useStore((s) => s.notify);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
 
@@ -60,9 +61,17 @@ export default function CommandPalette() {
       { id: 'reading', title: 'View: Reading mode', run: () => setViewMode('reading') },
       { id: 'live', title: 'View: Live edit', run: () => setViewMode('live') },
       { id: 'source', title: 'View: Source', run: () => setViewMode('source') },
-      { id: 'reindex', title: 'Rebuild search index', run: () => api.reindex() },
+      { id: 'reindex', title: 'Rebuild search index', run: async () => {
+          notify('Rebuilding search index…', 0);
+          try {
+            await api.reindex();
+            notify('Search index rebuilt');
+          } catch {
+            notify('Failed to rebuild search index');
+          }
+        } },
     ],
-    [save, setLeftPanel, setGraph, setSettings, setViewMode, activePath, toggleBookmark, openToSide, openDailyNote, createNote],
+    [save, setLeftPanel, setGraph, setSettings, setViewMode, activePath, toggleBookmark, openToSide, openDailyNote, createNote, notify],
   );
 
   const items = useMemo(() => {

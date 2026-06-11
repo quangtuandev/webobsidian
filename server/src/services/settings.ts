@@ -95,6 +95,25 @@ function defaults(): Settings {
   return base;
 }
 
+/**
+ * Guarantee the folder browser can reach the configured vault. The default
+ * allowedRoots are derived from the sample vault, so pointing the vault at a
+ * path outside them (e.g. ~/ObsidianVault) made Browse… return 403 with
+ * "Path outside allowed roots". Add the vault's parent directory as a root
+ * whenever it isn't already covered. Returns true if it mutated the draft.
+ */
+export function ensureVaultBrowsable(d: Settings): boolean {
+  const vaultPath = path.resolve(d.vault.path);
+  const roots = d.vault.allowedRoots ?? [];
+  const covered = roots.some((r) => {
+    const rr = path.resolve(r);
+    return vaultPath === rr || vaultPath.startsWith(rr + path.sep);
+  });
+  if (covered) return false;
+  d.vault.allowedRoots = [...roots, path.dirname(vaultPath)];
+  return true;
+}
+
 async function ensureDataDir(): Promise<void> {
   await fs.mkdir(config.dataDir, { recursive: true });
 }
@@ -134,6 +153,8 @@ export async function loadSettings(): Promise<Settings> {
       parsed.auth.passwordHash = '';
       dirty = true;
     }
+    // Heal older files whose allowedRoots predate the current vault path.
+    if (ensureVaultBrowsable(parsed)) dirty = true;
     cache = parsed;
     if (dirty) await persist(cache);
   } catch {

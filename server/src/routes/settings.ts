@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { asyncHandler } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
-import { getSettings, updateSettings, redactSettings } from '../services/settings.js';
+import { getSettings, updateSettings, redactSettings, ensureVaultBrowsable } from '../services/settings.js';
 import { config } from '../config.js';
 
 export const settingsRouter = Router();
@@ -23,7 +23,10 @@ settingsRouter.put(
   asyncHandler(async (req, res) => {
     const body = req.body ?? {};
     const updated = await updateSettings((d) => {
-      if (body.vault) Object.assign(d.vault, sanitizeVault(body.vault));
+      if (body.vault) {
+        Object.assign(d.vault, sanitizeVault(body.vault));
+        ensureVaultBrowsable(d);
+      }
       if (body.git) {
         const { token, ...rest } = body.git;
         Object.assign(d.git, rest);
@@ -47,6 +50,7 @@ function sanitizeVault(v: any) {
   if (Array.isArray(v.allowedRoots)) out.allowedRoots = v.allowedRoots;
   return out;
 }
+
 
 /** Safe folder browser for picking a vault path, limited to allowed roots. */
 settingsRouter.get(

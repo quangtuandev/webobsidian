@@ -153,7 +153,8 @@ interface AppState {
   revealInTree: (path: string) => void;
 
   toast: string;
-  notify: (msg: string) => void;
+  /** Show a toast. ms=0 keeps it until another notify() replaces it. */
+  notify: (msg: string, ms?: number) => void;
 
   openFile: (path: string) => Promise<void>;
   openWikilink: (target: string) => Promise<void>;
@@ -404,9 +405,11 @@ export const useStore = create<AppState>()(
       },
 
       toast: '',
-      notify: (msg) => {
+      notify: (msg, ms = 2500) => {
         set({ toast: msg });
-        window.setTimeout(() => set((s) => (s.toast === msg ? { toast: '' } : {})), 2500);
+        if (ms > 0) {
+          window.setTimeout(() => set((s) => (s.toast === msg ? { toast: '' } : {})), ms);
+        }
       },
 
       openFile: async (path) => {
