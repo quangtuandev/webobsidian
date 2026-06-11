@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import Icon from './Icon';
@@ -108,12 +108,30 @@ function VaultSettings({ s, reload }: { s: any; reload: () => void }) {
 function GitSettings({ s, reload }: { s: any; reload: () => void }) {
   const [g, setG] = useState({ ...s.git });
   const [log, setLog] = useState<string[]>([]);
+  const logRef = useRef<HTMLTextAreaElement>(null);
   const set = (k: string, v: any) => setG((p: any) => ({ ...p, [k]: v }));
-  const save = async () => { await api.putSettings({ git: g }); await reload(); setLog(['Saved git settings']); };
+  // Append timestamped lines to the running log instead of replacing it, so the
+  // textarea keeps a history of every git action across clicks.
+  const append = (lines: string[]) => {
+    const ts = new Date().toLocaleTimeString();
+    setLog((prev) => [...prev, ...lines.map((l, i) => (i === 0 ? `[${ts}] ${l}` : `         ${l}`))]);
+  };
+  // Auto-scroll to the newest line whenever the log grows.
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [log]);
+  const save = async () => { await api.putSettings({ git: g }); await reload(); append(['Saved git settings']); };
   const run = async (fn: () => Promise<any>, label: string) => {
-    setLog([`${label}…`]);
-    try { const r = await fn(); setLog([JSON.stringify(r.message ?? r.log ?? r)]); }
-    catch (e: any) { setLog([`Error: ${e.message}`]); }
+    append([`${label}…`]);
+    try {
+      const r = await fn();
+      // sync returns { ok, log: string[] }; others return { message }. Split any
+      // embedded newlines so multi-line git output renders one line per row.
+      const lines: string[] = Array.isArray(r?.log)
+        ? [`${label} ${r.ok ? 'ok' : 'NOT ok'}`, ...r.log]
+        : [String(r?.message ?? JSON.stringify(r))];
+      append(lines.flatMap((l) => String(l).split('\n')));
+    } catch (e: any) { append([`Error: ${e.message}`]); }
   };
   return (
     <div>
@@ -143,7 +161,25 @@ function GitSettings({ s, reload }: { s: any; reload: () => void }) {
         <button className="btn secondary" onClick={() => run(api.gitPush, 'Push')}>Push</button>
         <button className="btn" onClick={() => run(() => api.gitSync(), 'Sync')}>Sync now</button>
       </div>
-      {log.length > 0 && <pre style={{ background: 'var(--bg-primary)', padding: 10, borderRadius: 6, marginTop: 12, whiteSpace: 'pre-wrap' }}>{log.join('\n')}</pre>}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sync log</span>
+          {log.length > 0 && (
+            <button className="btn secondary" style={{ padding: '2px 8px' }} onClick={() => setLog([])}>Clear</button>
+          )}
+        </div>
+        <textarea
+          ref={logRef}
+          readOnly
+          value={log.length ? log.join('\n') : 'No git activity yet. Click an action above (Sync now, Pull, Push…) to see logs here.'}
+          style={{
+            width: '100%', height: 200, boxSizing: 'border-box', resize: 'vertical',
+            background: 'var(--bg-primary)', color: 'var(--text-normal)',
+            border: '1px solid var(--bg-modifier-border, #444)', borderRadius: 6, padding: 10,
+            fontFamily: 'var(--font-monospace, monospace)', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre',
+          }}
+        />
+      </div>
     </div>
   );
 }

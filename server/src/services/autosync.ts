@@ -22,7 +22,8 @@ async function tick(): Promise<void> {
   try {
     const res = await sync('WebObsidian auto-sync');
     lastRun = Date.now();
-    if (!res.ok) console.warn('[autosync]', res.log.join(' | '));
+    if (res.ok) console.log('[autosync] ok:', res.log.join(' | '));
+    else console.warn('[autosync] not-ok:', res.log.join(' | '));
   } catch (e: any) {
     console.warn('[autosync] failed:', e.message);
   } finally {

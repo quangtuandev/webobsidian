@@ -172,7 +172,14 @@ export async function pull(): Promise<string> {
   const g = await git();
   await ensureLfsAttributes();
   const s = await getSettings();
-  const res = await g.pull('origin', s.git.branch || 'main', { '--no-rebase': null });
+  // `--allow-unrelated-histories`: a vault that was `git init`'d locally and a
+  // remote that already has commits have no common ancestor; without this, the
+  // first pull aborts with "refusing to merge unrelated histories" and sync can
+  // never converge. Harmless (no-op) once the histories share a base.
+  const res = await g.pull('origin', s.git.branch || 'main', {
+    '--no-rebase': null,
+    '--allow-unrelated-histories': null,
+  });
   if (await lfsAvailable()) await g.raw(['lfs', 'pull']).catch(() => {});
   return `Pulled: ${res.summary.changes} changes, +${res.summary.insertions}/-${res.summary.deletions}`;
 }

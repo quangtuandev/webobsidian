@@ -4,7 +4,7 @@
 > Quy ước: `[ ]` chưa làm · `[~]` đang làm · `[x]` xong.
 > Cập nhật file này **mỗi khi** một mục thay đổi trạng thái.
 
-Cập nhật lần cuối: 2026-06-11 (Phase 19 — Mobile UI)
+Cập nhật lần cuối: 2026-06-11 (Git Sync fix — spawn EBADF / fd leak)
 
 ---
 
@@ -266,6 +266,18 @@ Cập nhật lần cuối: 2026-06-11 (Phase 19 — Mobile UI)
       hover (accent + dim phần không liên kết) tới khi di chuột; Esc đóng; wheel/drag hủy fly
 
 ### Nhật ký tiến độ
+- 2026-06-11 (Git Sync fix — `spawn EBADF`): bug "Git Sync ko chạy được" → lỗi `spawn EBADF`. Root
+  cause KHÔNG ở git: **chokidar v4** trên macOS watch từng file qua kqueue → giữ **1 fd/file**, vault
+  ~11k file làm process mở ~11k fd; khi `simple-git` spawn `git`, libuv hết fd dựng pipe stdio →
+  `spawn EBADF` (repro: giữ 11k fd rồi spawn = đúng lỗi). Fix: hạ **chokidar ^3.6.0** (FSEvents trên
+  mac = 1 fd cho cả cây; inotify per-dir trên Linux/Docker) → fd 11.003 → ~20. Thêm `--allow-unrelated-
+  histories` vào `pull()` (vault init local vs remote có sẵn commit). Logging `[git]` ở routes + autosync
+  (cho monitor). UI: log `<pre>` → **textarea cuộn, tích lũy, timestamp + Clear** (Settings ▸ GitHub Sync);
+  nút **Sync now** trên Ribbon trái (chỉ hiện khi bật git sync, icon xoay khi sync, lỗi → notify).
+  Reconcile 1 lần vault↔obsvault.git (lịch sử tách rời): union không mất dữ liệu (`merge -s ours
+  --allow-unrelated-histories` nối lịch sử + restore 2.646 file chỉ-có-remote, local thắng khi trùng).
+  Verify: `/api/git/sync` → `{ok:true, [Committed, Pulled, Pushed]}`, HEAD==origin/main, 0 file mất ở
+  cả 2 phía. Backup refs `backup/pre-union-{local,remote}` trong vault (xóa được sau khi yên tâm).
 - 2026-06-11 (Phase 19 — Mobile UI): làm mobile-friendly cho smartphone cảm ứng (tham chiếu Obsidian
   Mobile). `useIsMobile` (matchMedia 768px) + state cục bộ `mobileDrawer` (KHÔNG persist/broadcast →
   không đụng uistate sync desktop). CSS `@media ≤768px`: workspace full-width, ribbon+sidebar trái và

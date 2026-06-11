@@ -24,20 +24,39 @@ gitRouter.post(
   }),
 );
 
-gitRouter.post('/pull', asyncHandler(async (_req, res) => res.json({ message: await git.pull() })));
+gitRouter.post(
+  '/pull',
+  asyncHandler(async (_req, res) => {
+    const message = await git.pull();
+    console.log('[git] pull:', message);
+    res.json({ message });
+  }),
+);
 
 gitRouter.post(
   '/commit',
   asyncHandler(async (req, res) => {
-    res.json({ message: await git.commitAll(String(req.body?.message ?? '')) });
+    const message = await git.commitAll(String(req.body?.message ?? ''));
+    console.log('[git] commit:', message);
+    res.json({ message });
   }),
 );
 
-gitRouter.post('/push', asyncHandler(async (_req, res) => res.json({ message: await git.push() })));
+gitRouter.post(
+  '/push',
+  asyncHandler(async (_req, res) => {
+    const message = await git.push();
+    console.log('[git] push:', message);
+    res.json({ message });
+  }),
+);
 
 gitRouter.post(
   '/sync',
   asyncHandler(async (req, res) => {
-    res.json(await git.sync(req.body?.message));
+    console.log('[git] manual sync requested');
+    const result = await git.sync(req.body?.message);
+    console.log(`[git] sync ${result.ok ? 'ok' : 'not-ok'}:`, result.log.join(' | '));
+    res.json(result);
   }),
 );
