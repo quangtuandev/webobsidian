@@ -123,6 +123,26 @@ filesRouter.patch(
   }),
 );
 
+filesRouter.post(
+  '/copy',
+  asyncHandler(async (req, res) => {
+    const { from, to } = req.body ?? {};
+    if (typeof from !== 'string' || typeof to !== 'string') {
+      res.status(400).json({ error: 'from and to required' });
+      return;
+    }
+    const copied = await vault.copy(from, to);
+    for (const f of copied) {
+      if (isMd(f)) {
+        void qmd.upsert(f).catch(() => {});
+        void updateLinkGraphForFile(f).catch(() => {});
+      }
+    }
+    scheduleAutoCommitOnSave();
+    res.json({ ok: true, from, to });
+  }),
+);
+
 filesRouter.delete(
   '/',
   asyncHandler(async (req, res) => {

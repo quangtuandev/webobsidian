@@ -115,6 +115,10 @@ interface AppState {
   movePath: string | null;
   setMovePath: (path: string | null) => void;
 
+  /** File/folder copied or cut, awaiting paste (session-local, never persisted). */
+  clipboard: { path: string; mode: 'copy' | 'cut' } | null;
+  setClipboard: (c: { path: string; mode: 'copy' | 'cut' } | null) => void;
+
   leftPanel: 'files' | 'search' | 'tags' | 'bookmarks';
   setLeftPanel: (p: 'files' | 'search' | 'tags' | 'bookmarks') => void;
   rightPanel: 'backlinks' | 'outgoing' | 'tags' | 'outline';
@@ -335,6 +339,8 @@ export const useStore = create<AppState>()(
       removeRecent: (path) => set((s) => ({ recent: s.recent.filter((p) => p !== path) })),
       movePath: null,
       setMovePath: (path) => set({ movePath: path }),
+      clipboard: null,
+      setClipboard: (c) => set({ clipboard: c }),
       bookmarks: [],
       toggleBookmark: (path) =>
         set((s) => ({

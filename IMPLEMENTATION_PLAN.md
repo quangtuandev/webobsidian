@@ -4,7 +4,7 @@
 > Quy ước: `[ ]` chưa làm · `[~]` đang làm · `[x]` xong.
 > Cập nhật file này **mỗi khi** một mục thay đổi trạng thái.
 
-Cập nhật lần cuối: 2026-06-12 (New folder tạo thẳng + inline rename trong cây thư mục)
+Cập nhật lần cuối: 2026-06-12 (Copy/Cut/Paste file & folder trong context menu file tree)
 
 ---
 
@@ -339,7 +339,33 @@ Cập nhật lần cuối: 2026-06-12 (New folder tạo thẳng + inline rename 
       (JS, sync on resize) để trải hết bề rộng scroller. Verify CDP: iframe 992px khớp pane, code ẩn,
       toggle 2 chiều OK.
 
+## Phase 24 — Copy/Cut/Paste trong context menu file tree (FR-1, theo yêu cầu người dùng)
+- [x] M24.1 Clipboard state ở store: `clipboard: {path, mode:'copy'|'cut'} | null` + `setClipboard`
+      (session-local, KHÔNG nằm trong `PERSIST_KEYS` nên không lưu server/broadcast). Menu chuột phải
+      file thêm Copy/Cut, folder thêm Copy/Cut; mục Paste chỉ render khi clipboard có dữ liệu. Row bị
+      Cut làm mờ (`opacity .5`).
+- [x] M24.2 `doPaste` (FileTree): đích = folder click hoặc thư mục cha của file. Cut → `api.rename`
+      (move file/folder; dán đúng chỗ cũ = no-op; chặn dán folder vào chính nó/thư mục con; xoá clipboard
+      sau khi dán). Copy → `api.copy` đệ quy, `uniqueChildName` né trùng tên (`… copy`/`… copy N`), giữ
+      clipboard để dán nhiều lần.
+- [x] M24.3 Server: `vault.copy(from,to)` dùng `fs.cp` recursive (file + folder), trả danh sách file
+      tạo ra để reindex; throw nếu đích tồn tại. Route `POST /api/files/copy` upsert search + link graph
+      cho các `.md` mới rồi schedule auto-commit. Client `api.copy`. Typecheck server + web sạch.
+- [x] M24.4 (theo phản hồi): right-click vùng trống file tree giờ ra context menu của app (trước rơi vào
+      menu native trình duyệt). `onRootContext` trên div FileTree (`minHeight:100%` phủ hết `.sidebar-body`):
+      New note / New folder (vault root) + Paste (chỉ khi có clipboard) → `pasteToRoot` dán vào vault root
+      (Cut = `rename` về root, Copy = `api.copy` né trùng tên). Áp cả nhánh "Vault is empty.".
+
 ### Nhật ký tiến độ
+- 2026-06-12 (Phase 24 — Copy/Cut/Paste file & folder trong context menu file tree): store thêm
+  `clipboard {path, mode}` + `setClipboard` (session-local). FileTree: `doClipboard('copy'|'cut')`
+  set clipboard + toast; `doPaste` dán vào folder đích — Cut = `api.rename` (move, hỗ trợ folder,
+  chặn dán vào chính nó/thư mục con, dán chỗ cũ = no-op), Copy = `api.copy` đệ quy với `uniqueChildName`
+  né trùng tên. Menu file: Copy/Cut/Paste; menu folder: Copy/Cut/Paste. Row bị Cut mờ đi, Paste chỉ
+  hiện khi có clipboard. Server: `vault.copy` (`fs.cp` recursive trả list file tạo ra) + route
+  `POST /api/files/copy` (reindex `.md` mới, auto-commit); client `api.copy`. PRD 0.9 (FR-1 + API row).
+  Bổ sung (M24.4): right-click vùng trống file tree ra menu app (New note/New folder/Paste vào vault root)
+  thay vì menu native trình duyệt. Typecheck server + web sạch.
 - 2026-06-12 (New folder không prompt + inline rename trong cây thư mục): action store
   `newFolder(dir?)` tạo thẳng folder "Untitled" (tự tăng "Untitled 1/2…" nếu trùng), expand
   ancestor + mở panel Files rồi đặt `renamingPath` = path mới. FileTree thêm component

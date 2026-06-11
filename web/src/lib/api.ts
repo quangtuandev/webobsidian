@@ -102,6 +102,8 @@ export const api = {
     req<{ ok: true }>('/api/files/folder', { method: 'POST', body: JSON.stringify({ path }) }),
   rename: (from: string, to: string) =>
     req<{ ok: true }>('/api/files/rename', { method: 'PATCH', body: JSON.stringify({ from, to }) }),
+  copy: (from: string, to: string) =>
+    req<{ ok: true }>('/api/files/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
   remove: (path: string) =>
     req<{ ok: true }>(`/api/files/?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   uploadUrl: () => '/api/files/upload',

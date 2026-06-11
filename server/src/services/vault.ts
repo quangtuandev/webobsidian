@@ -135,6 +135,35 @@ export async function rename(from: string, to: string): Promise<void> {
   await fs.rename(absFrom, absTo);
 }
 
+/**
+ * Recursively copy a file or folder to a new location. Returns the vault-relative
+ * paths of every file created (so callers can reindex them). Throws if `to` exists.
+ */
+export async function copy(from: string, to: string): Promise<string[]> {
+  const absFrom = await resolveInVault(from);
+  const absTo = await resolveInVault(to);
+  await fs.mkdir(path.dirname(absTo), { recursive: true });
+  await fs.cp(absFrom, absTo, { recursive: true, errorOnExist: true, force: false });
+  const root = await getVaultRoot();
+  const out: string[] = [];
+  const st = await fs.stat(absTo);
+  if (st.isDirectory()) {
+    async function walk(dir: string) {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (IGNORED.has(e.name)) continue;
+        const abs = path.join(dir, e.name);
+        if (e.isDirectory()) await walk(abs);
+        else if (e.isFile()) out.push(toRel(root, abs));
+      }
+    }
+    await walk(absTo);
+  } else {
+    out.push(toRel(root, absTo));
+  }
+  return out;
+}
+
 /** Move a path into the vault trash folder, preserving relative layout. */
 export async function trash(rel: string): Promise<string> {
   const s = await getSettings();

@@ -1,7 +1,14 @@
 # PRD — WebObsidian
 
 > Product Requirements Document
-> Phiên bản: 0.8 · Cập nhật: 2026-06-11 · Trạng thái: Draft
+> Phiên bản: 0.9 · Cập nhật: 2026-06-12 · Trạng thái: Draft
+> Changelog 0.9 (FR-1 — Copy/Cut/Paste trong context menu file tree theo yêu cầu người dùng): menu chuột phải
+> file/folder bổ sung **Copy**, **Cut**, **Paste** (clipboard session-local, không persist/broadcast). Cut dùng
+> `rename` (move) cho cả file lẫn folder; Copy dùng endpoint mới **POST `/api/files/copy`** copy đệ quy file/folder
+> (qua `fs.cp` recursive, reindex các `.md` mới). Paste vào folder đích (folder được click hoặc thư mục cha của file):
+> tự đặt tên không trùng (`… copy`/`… copy N`), chặn dán folder vào chính nó/thư mục con, dán Cut vào đúng chỗ cũ là
+> no-op; row bị Cut làm mờ chờ dán; mục **Paste** chỉ hiện khi clipboard có dữ liệu. Right-click vùng trống
+> file tree cũng ra context menu của app (New note / New folder / Paste vào vault root) thay vì menu native trình duyệt.
 > Changelog 0.8 (FR-2/FR-4 — menu ⋯ parity Obsidian theo yêu cầu người dùng): menu **More options (⋯)**
 > dựng lại theo cấu trúc Obsidian Desktop và bổ sung: **Backlinks in document** + **Open linked view**
 > (Backlinks/Outgoing links/Outline → mở right panel); **Open in new window** (mở deep-link `/note/<path>`
@@ -119,6 +126,9 @@ webobsidian/
 ### FR-1 · Vault management
 - Chọn/đổi thư mục Vault qua Settings (đường dẫn server-side, có folder browser an toàn trong allowed roots).
 - CRUD file & folder: tạo, đọc, ghi, đổi tên, di chuyển, xoá (xoá → `.trash`).
+- **Copy/Cut/Paste** trên context menu file tree (file & folder): clipboard session-local; Cut = move (`rename`),
+  Copy = copy đệ quy (`POST /api/files/copy`, `fs.cp` recursive); Paste vào folder đích, tự né trùng tên, chặn dán
+  folder vào chính nó/thư mục con.
 - Hỗ trợ attachments (ảnh/pdf/…); upload từ web.
 - Watch filesystem (chokidar) để phản ánh thay đổi ngoài (git pull, sửa trực tiếp).
 - Tương thích cấu trúc `.obsidian/` (config, plugins, themes).
@@ -289,6 +299,7 @@ GET    /api/files/*path      # đọc file (md/binary)
 PUT    /api/files/*path      # ghi
 POST   /api/files/*path      # tạo / upload
 PATCH  /api/files            # rename/move
+POST   /api/files/copy       # copy đệ quy file/folder {from,to} (Paste sau Copy)
 DELETE /api/files/*path      # xoá → trash
 GET    /api/search?q=...
 GET    /api/backlinks?path=...

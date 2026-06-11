@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api, type TreeNode } from '../lib/api';
+import { findNode } from '../lib/tree';
 import { pathToUrl } from '../lib/urlsync';
 import Icon from './Icon';
 
@@ -69,6 +70,22 @@ function parentDir(path: string): string {
   return i < 0 ? '' : path.slice(0, i);
 }
 
+/**
+ * Pick a name for `base` inside `targetDir` that doesn't collide with an
+ * existing child — appends " copy" / " copy N" before the extension, like Obsidian.
+ */
+function uniqueChildName(tree: TreeNode | null, targetDir: string, base: string): string {
+  const folder = targetDir ? findNode(tree, targetDir) : tree;
+  const taken = new Set((folder?.children ?? []).map((c) => c.name.toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  const dot = base.lastIndexOf('.');
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  const ext = dot > 0 ? base.slice(dot) : '';
+  let name = `${stem} copy${ext}`;
+  for (let i = 1; taken.has(name.toLowerCase()); i++) name = `${stem} copy ${i}${ext}`;
+  return name;
+}
+
 function Node({ node, depth }: { node: TreeNode; depth: number }) {
   const expanded = useStore((s) => s.expanded);
   const toggleFolder = useStore((s) => s.toggleFolder);
@@ -81,6 +98,8 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
   const closeTab = useStore((s) => s.closeTab);
   const openContextMenu = useStore((s) => s.openContextMenu);
   const setMovePath = useStore((s) => s.setMovePath);
+  const clipboard = useStore((s) => s.clipboard);
+  const setClipboard = useStore((s) => s.setClipboard);
   const newNote = useStore((s) => s.newNote);
   const newFolder = useStore((s) => s.newFolder);
   const renamingPath = useStore((s) => s.renamingPath);
@@ -93,6 +112,7 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
 
   const isFolder = node.type === 'folder';
   const editing = renamingPath === node.path;
+  const isCut = clipboard?.mode === 'cut' && clipboard.path === node.path;
 
   const doRename = () => setRenamingPath(node.path);
   const doDelete = async () => {
@@ -115,6 +135,48 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
     notify('Made a copy');
   };
   const doMove = () => setMovePath(node.path);
+
+  const doClipboard = (mode: 'copy' | 'cut') => () => {
+    setClipboard({ path: node.path, mode });
+    notify(mode === 'cut' ? 'Cut' : 'Copied');
+  };
+  const doPaste = async () => {
+    const clip = useStore.getState().clipboard;
+    if (!clip) return;
+    const targetDir = isFolder ? node.path : parentDir(node.path);
+    // Never paste a folder into itself or one of its own descendants.
+    if (clip.path === targetDir || targetDir === clip.path || targetDir.startsWith(`${clip.path}/`)) {
+      notify('Cannot paste into itself');
+      return;
+    }
+    const base = clip.path.split('/').pop()!;
+    const srcDir = parentDir(clip.path);
+    if (clip.mode === 'cut') {
+      if (targetDir === srcDir) { setClipboard(null); return; } // already here — no-op
+      const to = targetDir ? `${targetDir}/${base}` : base;
+      try {
+        await api.rename(clip.path, to);
+        closeTab(clip.path);
+        setClipboard(null);
+        await loadTree();
+        notify('Moved');
+      } catch (e: any) {
+        notify(e?.message ?? 'Paste failed');
+      }
+      return;
+    }
+    // copy — recursive server-side copy (works for both files and folders).
+    const name = uniqueChildName(useStore.getState().tree, targetDir, base);
+    const to = targetDir ? `${targetDir}/${name}` : name;
+    try {
+      await api.copy(clip.path, to);
+      await loadTree();
+      notify('Pasted');
+    } catch (e: any) {
+      notify(e?.message ?? 'Paste failed');
+    }
+  };
+
   const copyPath = () => {
     navigator.clipboard?.writeText(node.path).catch(() => {});
     notify('Path copied');
@@ -132,6 +194,10 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
           { label: 'New note', onClick: () => newNote(node.path) },
           { label: 'New folder', onClick: () => newFolder(node.path) },
           { label: '', separator: true },
+          { label: 'Copy', onClick: doClipboard('copy') },
+          { label: 'Cut', onClick: doClipboard('cut') },
+          ...(clipboard ? [{ label: 'Paste', onClick: doPaste }] : []),
+          { label: '', separator: true },
           { label: 'Rename…', onClick: doRename },
           { label: 'Move folder to…', onClick: doMove },
           { label: 'Copy path', onClick: copyPath },
@@ -148,6 +214,11 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
             ? [{ label: 'Share…', icon: 'globe', onClick: () => setShareDialog(node.path) }]
             : []),
           { label: 'Make a copy', onClick: doCopy },
+          { label: '', separator: true },
+          { label: 'Copy', onClick: doClipboard('copy') },
+          { label: 'Cut', onClick: doClipboard('cut') },
+          ...(clipboard ? [{ label: 'Paste', onClick: doPaste }] : []),
+          { label: '', separator: true },
           { label: 'Rename…', onClick: doRename },
           { label: 'Move file to…', onClick: doMove },
           { label: 'Copy URL path', onClick: copyUrl },
@@ -181,6 +252,7 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
       <div className="tree-item">
         <div
           className={`tree-row folder ${dropping ? 'drop-target' : ''}`}
+          style={isCut ? { opacity: 0.5 } : undefined}
           onClick={() => toggleFolder(node.path)}
           onContextMenu={onContext}
           onDragOver={(e) => { e.preventDefault(); setDropping(true); }}
@@ -212,6 +284,7 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
     <div className="tree-item">
       <div
         className={`tree-row ${activePath === node.path ? 'active' : ''}`}
+        style={isCut ? { opacity: 0.5 } : undefined}
         data-path={node.path}
         draggable
         onDragStart={onDragStart}
@@ -239,6 +312,12 @@ export default function FileTree() {
   const tree = useStore((s) => s.tree);
   const loadTree = useStore((s) => s.loadTree);
   const notify = useStore((s) => s.notify);
+  const closeTab = useStore((s) => s.closeTab);
+  const clipboard = useStore((s) => s.clipboard);
+  const setClipboard = useStore((s) => s.setClipboard);
+  const openContextMenu = useStore((s) => s.openContextMenu);
+  const newNote = useStore((s) => s.newNote);
+  const newFolder = useStore((s) => s.newFolder);
 
   // "Reveal file in navigation": scroll + flash the row once its folders expand.
   useEffect(() => {
@@ -266,11 +345,66 @@ export default function FileTree() {
     await loadTree();
   };
 
+  // Paste into the vault root (right-click on the empty area of the file tree).
+  const pasteToRoot = async () => {
+    const clip = useStore.getState().clipboard;
+    if (!clip) return;
+    const base = clip.path.split('/').pop()!;
+    if (clip.mode === 'cut') {
+      if (!clip.path.includes('/')) { setClipboard(null); return; } // already at root — no-op
+      try {
+        await api.rename(clip.path, base);
+        closeTab(clip.path);
+        setClipboard(null);
+        await loadTree();
+        notify('Moved');
+      } catch (e: any) {
+        notify(e?.message ?? 'Paste failed');
+      }
+      return;
+    }
+    const name = uniqueChildName(useStore.getState().tree, '', base);
+    try {
+      await api.copy(clip.path, name);
+      await loadTree();
+      notify('Pasted');
+    } catch (e: any) {
+      notify(e?.message ?? 'Paste failed');
+    }
+  };
+
+  const onRootContext = (e: React.MouseEvent) => {
+    e.preventDefault();
+    openContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'New note', onClick: () => newNote('') },
+        { label: 'New folder', onClick: () => newFolder('') },
+        ...(clipboard
+          ? [{ label: '', separator: true }, { label: 'Paste', onClick: pasteToRoot }]
+          : []),
+      ],
+    });
+  };
+
   if (!tree) return <div style={{ padding: 12, color: 'var(--text-faint)' }}>Loading…</div>;
   if (!tree.children?.length)
-    return <div style={{ padding: 12, color: 'var(--text-faint)' }}>Vault is empty.</div>;
+    return (
+      <div
+        onContextMenu={onRootContext}
+        style={{ padding: 12, color: 'var(--text-faint)', minHeight: '100%' }}
+      >
+        Vault is empty.
+      </div>
+    );
   return (
-    <div onDragOver={(e) => e.preventDefault()} onDrop={onRootDrop} style={{ minHeight: '100%' }}>
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={onRootDrop}
+      onContextMenu={onRootContext}
+      style={{ minHeight: '100%' }}
+    >
       {tree.children.map((c) => (
         <Node key={c.path} node={c} depth={0} />
       ))}
