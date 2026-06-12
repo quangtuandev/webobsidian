@@ -141,6 +141,9 @@ interface AppState {
   setPalette: (v: boolean, mode?: 'all' | 'commands' | 'files') => void;
   settingsOpen: boolean;
   setSettings: (v: boolean) => void;
+  /** Open (true) or close (false) the Trash modal. */
+  trashOpen: boolean;
+  setTrash: (v: boolean) => void;
   /** Open (true) or close (false) the Graph view tab. */
   setGraph: (v: boolean) => void;
   openGraph: () => Promise<void>;
@@ -373,6 +376,8 @@ export const useStore = create<AppState>()(
       setPalette: (v, mode = 'all') => set({ paletteOpen: v, paletteMode: mode }),
       settingsOpen: false,
       setSettings: (v) => set({ settingsOpen: v }),
+      trashOpen: false,
+      setTrash: (v) => set({ trashOpen: v }),
       setGraph: (v) => {
         if (v) get().openGraph();
         else get().closeTab(GRAPH_PATH);

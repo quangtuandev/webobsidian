@@ -4,6 +4,7 @@ import path from 'node:path';
 import { asyncHandler } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
 import * as vault from '../services/vault.js';
+import { getSettings } from '../services/settings.js';
 import { qmd } from '../services/search.js';
 import { updateLinkGraphForFile } from '../services/links.js';
 import { scheduleAutoCommitOnSave } from '../services/git.js';
@@ -143,6 +144,54 @@ filesRouter.post(
   }),
 );
 
+// --- Trash (FR-1) -----------------------------------------------------------
+// Listed/mutated via dedicated /trash* routes; the plain DELETE / below either
+// trashes or permanently removes depending on settings.vault.deleteMode.
+
+filesRouter.get(
+  '/trash',
+  asyncHandler(async (_req, res) => {
+    res.json({ items: await vault.listTrash() });
+  }),
+);
+
+filesRouter.post(
+  '/trash/restore',
+  asyncHandler(async (req, res) => {
+    const rel = String(req.body?.path ?? '');
+    if (!rel) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+    const restored = await vault.restoreFromTrash(rel);
+    reindex({ upsert: restored, added: restored });
+    res.json({ ok: true, restored });
+  }),
+);
+
+// Permanently delete one trashed item.
+filesRouter.delete(
+  '/trash/item',
+  asyncHandler(async (req, res) => {
+    const rel = String(req.query.path ?? '');
+    if (!rel) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+    await vault.deleteFromTrash(rel);
+    res.json({ ok: true });
+  }),
+);
+
+// Empty the whole trash.
+filesRouter.delete(
+  '/trash',
+  asyncHandler(async (_req, res) => {
+    await vault.emptyTrash();
+    res.json({ ok: true });
+  }),
+);
+
 filesRouter.delete(
   '/',
   asyncHandler(async (req, res) => {
@@ -151,8 +200,15 @@ filesRouter.delete(
       res.status(400).json({ error: 'path required' });
       return;
     }
-    const dest = await vault.trash(rel);
+    const s = await getSettings();
     qmd.remove(rel);
+    if (s.vault.deleteMode === 'permanent') {
+      await vault.remove(rel);
+      reindex({ removed: rel });
+      res.json({ ok: true, deleted: rel });
+      return;
+    }
+    const dest = await vault.trash(rel);
     reindex({ removed: rel });
     res.json({ ok: true, trashed: dest });
   }),

@@ -229,11 +229,11 @@ export default function Workspace() {
           danger: true,
           icon: 'trash',
           onClick: async () => {
-            if (confirm(`Move "${baseName}" to trash?`)) {
-              await api.remove(path);
+            if (confirm(`Delete "${baseName}"?`)) {
+              const r = await api.remove(path);
               closeTab(path);
               await loadTree();
-              notify('Moved to trash');
+              notify(r.deleted ? 'Deleted permanently' : 'Moved to trash');
             }
           },
         },

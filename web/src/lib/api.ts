@@ -10,6 +10,15 @@ export interface TreeNode {
   children?: TreeNode[];
 }
 
+export interface TrashItem {
+  name: string;
+  path: string; // includes the .trash/ prefix
+  original: string; // where it restores to
+  ext: string;
+  size: number;
+  mtime: number;
+}
+
 export interface ShareRecord {
   id: string;
   path: string;
@@ -108,7 +117,20 @@ export const api = {
   copy: (from: string, to: string) =>
     req<{ ok: true }>('/api/files/copy', { method: 'POST', body: JSON.stringify({ from, to }) }),
   remove: (path: string) =>
-    req<{ ok: true }>(`/api/files/?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+    req<{ ok: true; trashed?: string; deleted?: string }>(
+      `/api/files/?path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    ),
+  // trash (FR-1)
+  listTrash: () => req<{ items: TrashItem[] }>('/api/files/trash'),
+  restoreTrash: (path: string) =>
+    req<{ ok: true; restored: string }>('/api/files/trash/restore', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }),
+  deleteTrashItem: (path: string) =>
+    req<{ ok: true }>(`/api/files/trash/item?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  emptyTrash: () => req<{ ok: true }>('/api/files/trash', { method: 'DELETE' }),
   uploadUrl: () => '/api/files/upload',
   upload: async (file: File, dir = 'attachments') => {
     const fd = new FormData();

@@ -69,11 +69,17 @@ function Row({ name, desc, children }: { name: string; desc?: string; children: 
 
 function VaultSettings({ s, reload }: { s: any; reload: () => void }) {
   const [path, setPath] = useState(s.vault.path);
+  const [deleteMode, setDeleteMode] = useState(s.vault.deleteMode ?? 'trash');
   const [browser, setBrowser] = useState<any>(null);
   const save = async () => {
     await api.putSettings({ vault: { path } });
     await reload();
     alert('Vault path saved. Reindex from the command palette if needed.');
+  };
+  const saveDeleteMode = async (mode: string) => {
+    setDeleteMode(mode);
+    await api.putSettings({ vault: { deleteMode: mode } });
+    await reload();
   };
   const browse = async (dir?: string) => setBrowser(await api.browse(dir).catch((e) => ({ error: e.message })));
   return (
@@ -103,6 +109,20 @@ function VaultSettings({ s, reload }: { s: any; reload: () => void }) {
         </div>
       )}
       {browser?.error && <div style={{ color: '#e5534b' }}>{browser.error}</div>}
+      <Row
+        name="When deleting a file"
+        desc="Move to .trash keeps a recoverable copy (Open trash to restore). Permanently delete removes it immediately."
+      >
+        <select
+          className="text-input"
+          style={{ width: 220 }}
+          value={deleteMode}
+          onChange={(e) => saveDeleteMode(e.target.value)}
+        >
+          <option value="trash">Move to .trash (recoverable)</option>
+          <option value="permanent">Permanently delete</option>
+        </select>
+      </Row>
     </div>
   );
 }

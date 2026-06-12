@@ -32,6 +32,9 @@ const SettingsSchema = z.object({
       path: z.string().default(''),
       allowedRoots: z.array(z.string()).default([]),
       trash: z.string().default('.trash'),
+      // Xoá file: 'trash' = chuyển vào thư mục .trash (khôi phục được);
+      // 'permanent' = xoá vĩnh viễn ngay.
+      deleteMode: z.enum(['trash', 'permanent']).default('trash'),
       attachmentDir: z.string().default('attachments'),
     })
     .default({}),

@@ -31,6 +31,7 @@ export default function CommandPalette() {
   const openFile = useStore((s) => s.openFile);
   const openToSide = useStore((s) => s.openToSide);
   const setSettings = useStore((s) => s.setSettings);
+  const setTrash = useStore((s) => s.setTrash);
   const setGraph = useStore((s) => s.setGraph);
   const setLeftPanel = useStore((s) => s.setLeftPanel);
   const setViewMode = useStore((s) => s.setViewMode);
@@ -57,6 +58,7 @@ export default function CommandPalette() {
       { id: 'bookmarks', title: 'Open bookmarks & recent', run: () => setLeftPanel('bookmarks') },
       { id: 'graph', title: 'Open graph view', run: () => setGraph(true) },
       { id: 'settings', title: 'Open settings', run: () => setSettings(true) },
+      { id: 'trash', title: 'Open trash', run: () => setTrash(true) },
       { id: 'reading', title: 'View: Reading mode', run: () => setViewMode('reading') },
       { id: 'live', title: 'View: Live edit', run: () => setViewMode('live') },
       { id: 'source', title: 'View: Source', run: () => setViewMode('source') },
@@ -70,7 +72,7 @@ export default function CommandPalette() {
           }
         } },
     ],
-    [save, setLeftPanel, setGraph, setSettings, setViewMode, activePath, toggleBookmark, openToSide, openDailyNote, newNote, newCanvas, notify],
+    [save, setLeftPanel, setGraph, setSettings, setTrash, setViewMode, activePath, toggleBookmark, openToSide, openDailyNote, newNote, newCanvas, notify],
   );
 
   const items = useMemo(() => {

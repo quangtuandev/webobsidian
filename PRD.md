@@ -1,7 +1,14 @@
 # PRD — WebObsidian
 
 > Product Requirements Document
-> Phiên bản: 1.0 · Cập nhật: 2026-06-12 · Trạng thái: Draft
+> Phiên bản: 1.1 · Cập nhật: 2026-06-12 · Trạng thái: Draft
+> Changelog 1.1 (FR-1 — Trash UI + chế độ xoá, theo yêu cầu người dùng): bổ sung **giao diện Trash** để xem,
+> **khôi phục (Restore)** và **xoá vĩnh viễn** từng file đã xoá, cùng nút **Empty trash**. Mở Trash từ nút 🗑
+> trên header sidebar Files hoặc command palette ("Open trash"). Thêm setting `vault.deleteMode`
+> (`trash` = chuyển vào `.trash` khôi phục được [mặc định] · `permanent` = xoá vĩnh viễn ngay) trong
+> Settings → Vault & Files. API mới: `GET /api/files/trash`, `POST /api/files/trash/restore`,
+> `DELETE /api/files/trash/item`, `DELETE /api/files/trash`. Restore tự né trùng tên (suffix `.restored-<ts>`)
+> và dọn thư mục rỗng trong `.trash`; mọi thao tác trash đều guard path traversal (chỉ tác động trong `.trash`).
 > Changelog 1.0 (FR-12 — Canvas, theo yêu cầu người dùng): clone tính năng **Canvas** của Obsidian. Khung vẽ
 > vô hạn (pan/zoom) chứa các node (text markdown, file embed/link tới note hoặc ảnh, link URL, group) và các
 > edge nối cạnh node có mũi tên + nhãn. Đọc/ghi đúng định dạng mở **JSON Canvas** (`.canvas`, tương thích
@@ -132,7 +139,10 @@ webobsidian/
 
 ### FR-1 · Vault management
 - Chọn/đổi thư mục Vault qua Settings (đường dẫn server-side, có folder browser an toàn trong allowed roots).
-- CRUD file & folder: tạo, đọc, ghi, đổi tên, di chuyển, xoá (xoá → `.trash`).
+- CRUD file & folder: tạo, đọc, ghi, đổi tên, di chuyển, xoá. Chế độ xoá cấu hình qua
+  `vault.deleteMode`: `trash` (→ `.trash`, khôi phục được — mặc định) hoặc `permanent` (xoá hẳn).
+- **Trash**: giao diện xem các file đã xoá, **Restore** về vị trí gốc, **xoá vĩnh viễn** từng file, **Empty
+  trash**. Trash ẩn khỏi file tree (dotfile) và khỏi watcher; mở qua nút 🗑 header Files hoặc command palette.
 - **Copy/Cut/Paste** trên context menu file tree (file & folder): clipboard session-local; Cut = move (`rename`),
   Copy = copy đệ quy (`POST /api/files/copy`, `fs.cp` recursive); Paste vào folder đích, tự né trùng tên, chặn dán
   folder vào chính nó/thư mục con.
@@ -345,7 +355,11 @@ PUT    /api/files/*path      # ghi
 POST   /api/files/*path      # tạo / upload
 PATCH  /api/files            # rename/move
 POST   /api/files/copy       # copy đệ quy file/folder {from,to} (Paste sau Copy)
-DELETE /api/files/*path      # xoá → trash
+DELETE /api/files/*path      # xoá → .trash hoặc xoá hẳn (theo vault.deleteMode)
+GET    /api/files/trash      # liệt kê file trong .trash
+POST   /api/files/trash/restore   # khôi phục {path} về vị trí gốc
+DELETE /api/files/trash/item # xoá vĩnh viễn 1 item trong trash
+DELETE /api/files/trash      # empty trash (xoá hẳn toàn bộ)
 GET    /api/search?q=...
 GET    /api/backlinks?path=...
 GET    /api/git/status | POST /api/git/{pull,commit,push,sync}
@@ -389,7 +403,7 @@ GET    /api/v1/tags
   "auth":   { "userPasswordHash": "scrypt$... (pass đã đổi; rỗng = dùng mặc định 123456)",
               "passwordHash": "scrypt$... (override khôi phục; rỗng = không có)",
               "jwtSecret": "..." },
-  "vault":  { "path": "/vault", "allowedRoots": ["/vault"], "trash": ".trash" },
+  "vault":  { "path": "/vault", "allowedRoots": ["/vault"], "trash": ".trash", "deleteMode": "trash" },
   "git":    { "enabled": false, "remote": "", "branch": "main",
               "token": "", "authorName": "", "authorEmail": "",
               "autoSync": false, "intervalSec": 300,

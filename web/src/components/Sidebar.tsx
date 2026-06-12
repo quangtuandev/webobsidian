@@ -18,6 +18,7 @@ export default function Sidebar() {
   const newNote = useStore((s) => s.newNote);
   const newFolder = useStore((s) => s.newFolder);
   const setSettings = useStore((s) => s.setSettings);
+  const setTrash = useStore((s) => s.setTrash);
   const vaultName = useStore((s) => s.tree?.name) || 'Vault';
 
   return (
@@ -34,6 +35,9 @@ export default function Sidebar() {
             </button>
             <button className="nav-action" title="Refresh" onClick={() => loadTree()}>
               <Icon name="refresh-cw" size={16} />
+            </button>
+            <button className="nav-action" title="Trash" onClick={() => setTrash(true)}>
+              <Icon name="trash" size={16} />
             </button>
           </>
         )}

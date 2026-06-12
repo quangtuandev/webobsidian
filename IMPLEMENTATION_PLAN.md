@@ -4,7 +4,7 @@
 > Quy ước: `[ ]` chưa làm · `[~]` đang làm · `[x]` xong.
 > Cập nhật file này **mỗi khi** một mục thay đổi trạng thái.
 
-Cập nhật lần cuối: 2026-06-12 (Phase 25 — Canvas FR-12: clone Canvas Obsidian, JSON Canvas .canvas, node text/file/link/group + edge mũi tên, pan/zoom, autosave)
+Cập nhật lần cuối: 2026-06-12 (M3.6 — Trash UI FR-1: xem/Restore/xoá vĩnh viễn/Empty trash + setting deleteMode trash|permanent; verified end-to-end qua API trên vault tạm)
 
 ---
 
@@ -33,6 +33,9 @@ Cập nhật lần cuối: 2026-06-12 (Phase 25 — Canvas FR-12: clone Canvas O
 - [x] M3.3 Upload attachments (binary), serve binary với mime
 - [x] M3.4 Folder browser an toàn để chọn vault path
 - [x] M3.5 Filesystem watcher (chokidar) → events qua WebSocket
+- [x] M3.6 Trash UI + chế độ xoá (FR-1): `vault.deleteMode` (trash/permanent) + Settings selector;
+      service `listTrash/restoreFromTrash/deleteFromTrash/emptyTrash/remove`; routes `/api/files/trash*`;
+      modal TrashView (Restore / xoá vĩnh viễn / Empty trash) mở từ header Files + command palette
 
 ## Phase 4 — QMD Search engine — FR-7
 - [x] M4.1 Module QMD trên MiniSearch: index content/title/headings/tags/path/frontmatter
@@ -375,6 +378,17 @@ Cập nhật lần cuối: 2026-06-12 (Phase 25 — Canvas FR-12: clone Canvas O
       "New canvas" vào context menu FileTree (file/folder/root) + command palette. Typecheck web sạch.
 
 ### Nhật ký tiến độ
+- 2026-06-12 (M3.6 — Trash UI + deleteMode, theo yêu cầu người dùng): thêm setting `vault.deleteMode`
+  (`trash` mặc định | `permanent`) — DELETE `/api/files/` rẽ nhánh trash vs `vault.remove()` xoá hẳn.
+  Service vault: `listTrash/restoreFromTrash/deleteFromTrash/emptyTrash` (+ `pruneEmptyDirs`, guard
+  `assertInTrash` chống thao tác ngoài `.trash`). Routes `/api/files/trash` (GET list · POST restore ·
+  DELETE item · DELETE empty). Frontend: `api.listTrash/restoreTrash/deleteTrashItem/emptyTrash`, store
+  `trashOpen/setTrash`, modal `TrashView` (Restore / xoá vĩnh viễn / Empty trash) mở từ nút 🗑 header Files,
+  command palette "Open trash". Settings → Vault & Files thêm select chế độ xoá. Confirm/notify file tree +
+  pane menu đổi sang generic "Delete" + báo "Moved to trash" / "Deleted permanently" theo response. Verified
+  end-to-end qua curl trên vault tạm: trash list giữ cấu trúc thư mục, restore né trùng tên + prune dir rỗng,
+  permanent mode xoá hẳn (không lưu bản sao), empty trash, guard "Not a trash item", PUT deleteMode giữ
+  nguyên `vault.path`. Typecheck 2 workspace sạch.
 - 2026-06-12 (Phase 25q — Canvas external link new-tab + open zoom-to-fit theo phản hồi): (1) **external
   link** (`http(s)://`) trong card → `onClickCapture` trên node `window.open(href,'_blank')` mở tab trình
   duyệt mới (wikilink href="#" vẫn rớt xuống openWikilink). (2) **Mở canvas tự Zoom-to-fit**: bỏ reset view

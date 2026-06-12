@@ -52,6 +52,7 @@ function sanitizeVault(v: any) {
   const out: any = {};
   if (typeof v.path === 'string') out.path = v.path;
   if (typeof v.trash === 'string') out.trash = v.trash;
+  if (v.deleteMode === 'trash' || v.deleteMode === 'permanent') out.deleteMode = v.deleteMode;
   if (typeof v.attachmentDir === 'string') out.attachmentDir = v.attachmentDir;
   if (Array.isArray(v.allowedRoots)) out.allowedRoots = v.allowedRoots;
   return out;

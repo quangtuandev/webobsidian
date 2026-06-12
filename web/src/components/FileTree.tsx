@@ -117,11 +117,11 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
 
   const doRename = () => setRenamingPath(node.path);
   const doDelete = async () => {
-    if (confirm(`Move "${node.name}" to trash?`)) {
-      await api.remove(node.path);
+    if (confirm(`Delete "${node.name}"?`)) {
+      const r = await api.remove(node.path);
       closeTab(node.path);
       await loadTree();
-      notify('Moved to trash');
+      notify(r.deleted ? 'Deleted permanently' : 'Moved to trash');
     }
   };
 

@@ -193,6 +193,12 @@ export async function copy(from: string, to: string): Promise<string[]> {
   return out;
 }
 
+/** Permanently delete a file or folder (no trash). */
+export async function remove(rel: string): Promise<void> {
+  const abs = await resolveInVault(rel);
+  await fs.rm(abs, { recursive: true, force: true });
+}
+
 /** Move a path into the vault trash folder, preserving relative layout. */
 export async function trash(rel: string): Promise<string> {
   const s = await getSettings();
@@ -217,6 +223,124 @@ async function pathExists(abs: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** ---- Trash (FR-1) -------------------------------------------------------- */
+
+export interface TrashItem {
+  name: string; // basename
+  path: string; // vault-relative, including the trash prefix, e.g. ".trash/folder/note.md"
+  original: string; // where it restores to, e.g. "folder/note.md"
+  ext: string;
+  size: number;
+  mtime: number; // deletion time (file mtime when it landed in trash)
+}
+
+async function getTrashRoot(): Promise<string> {
+  const s = await getSettings();
+  const root = await getVaultRoot();
+  return path.join(root, s.vault.trash);
+}
+
+/** Confirm `abs` lives inside the trash folder; return its trash-relative path. */
+function assertInTrash(abs: string, trashRoot: string): string {
+  const rel = path.relative(trashRoot, abs);
+  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw Object.assign(new Error('Not a trash item'), { status: 400 });
+  }
+  return rel;
+}
+
+/** Remove now-empty directories upward from `dir`, stopping at (and keeping) `stopAt`. */
+async function pruneEmptyDirs(dir: string, stopAt: string): Promise<void> {
+  let cur = path.resolve(dir);
+  const root = path.resolve(stopAt);
+  while (cur !== root && cur.startsWith(root + path.sep)) {
+    try {
+      const remaining = await fs.readdir(cur);
+      if (remaining.length > 0) break;
+      await fs.rmdir(cur);
+    } catch {
+      break;
+    }
+    cur = path.dirname(cur);
+  }
+}
+
+/** List every file currently in the trash, newest deletion first. */
+export async function listTrash(): Promise<TrashItem[]> {
+  const root = await getVaultRoot();
+  const trashRoot = await getTrashRoot();
+  const out: TrashItem[] = [];
+  async function walk(dir: string) {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return; // trash folder doesn't exist yet
+    }
+    for (const e of entries) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        await walk(abs);
+      } else if (e.isFile()) {
+        const st = await fs.stat(abs).catch(() => null);
+        out.push({
+          name: e.name,
+          path: toRel(root, abs),
+          original: path.relative(trashRoot, abs).split(path.sep).join('/'),
+          ext: path.extname(e.name).toLowerCase(),
+          size: st?.size ?? 0,
+          mtime: st ? st.mtimeMs : 0,
+        });
+      }
+    }
+  }
+  await walk(trashRoot);
+  out.sort((a, b) => b.mtime - a.mtime);
+  return out;
+}
+
+/** Move a trashed item back to its original location. Returns the restored rel path. */
+export async function restoreFromTrash(trashRel: string): Promise<string> {
+  const trashRoot = await getTrashRoot();
+  const absFrom = await resolveInVault(trashRel);
+  const relInTrash = assertInTrash(absFrom, trashRoot);
+  let destRel = relInTrash.split(path.sep).join('/');
+  let absTo = await resolveInVault(destRel);
+  // Don't clobber a file that was recreated at the same path after deletion.
+  if (await pathExists(absTo)) {
+    const ext = path.extname(destRel);
+    destRel = `${destRel.slice(0, destRel.length - ext.length)}.restored-${Date.now()}${ext}`;
+    absTo = await resolveInVault(destRel);
+  }
+  await fs.mkdir(path.dirname(absTo), { recursive: true });
+  await fs.rename(absFrom, absTo);
+  await pruneEmptyDirs(path.dirname(absFrom), trashRoot);
+  return destRel;
+}
+
+/** Permanently delete a single trashed item. */
+export async function deleteFromTrash(trashRel: string): Promise<void> {
+  const trashRoot = await getTrashRoot();
+  const abs = await resolveInVault(trashRel);
+  assertInTrash(abs, trashRoot);
+  await fs.rm(abs, { recursive: true, force: true });
+  await pruneEmptyDirs(path.dirname(abs), trashRoot);
+}
+
+/** Permanently delete everything in the trash. */
+export async function emptyTrash(): Promise<void> {
+  const trashRoot = await getTrashRoot();
+  let entries;
+  try {
+    entries = await fs.readdir(trashRoot);
+  } catch {
+    return; // nothing to empty
+  }
+  for (const name of entries) {
+    await fs.rm(path.join(trashRoot, name), { recursive: true, force: true });
   }
 }
 

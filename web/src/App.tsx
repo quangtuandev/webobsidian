@@ -11,6 +11,7 @@ import CommandPalette from './components/CommandPalette';
 import Settings from './components/Settings';
 import ShareDialog from './components/ShareDialog';
 import VersionHistory from './components/VersionHistory';
+import TrashView from './components/TrashView';
 import ContextMenu from './components/ContextMenu';
 import FolderPicker from './components/FolderPicker';
 import { loadPlugins } from './lib/plugins';
@@ -185,6 +186,7 @@ export default function App() {
       <Settings />
       <ShareDialog />
       <VersionHistory />
+      <TrashView />
       <ContextMenu />
       <FolderPicker />
       {toast && <div className="toast">{toast}</div>}
