@@ -173,6 +173,65 @@ export default function CanvasView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePath, data]);
 
+  // Two-finger pinch-to-zoom + two-finger pan (touch). Capture-phase listeners run
+  // before React's node/viewport handlers, so a second finger always starts a pinch
+  // (cancelling any single-finger drag) regardless of what's under the fingers.
+  useEffect(() => {
+    const vp = vpRef.current;
+    if (!vp) return;
+    const pts = new Map<number, { x: number; y: number }>();
+    let start: { dist: number; cx: number; cy: number; tx: number; ty: number; scale: number } | null = null;
+    const snapshot = () => {
+      const a = [...pts.values()];
+      const r = vp.getBoundingClientRect();
+      const dist = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1;
+      const cx = (a[0].x + a[1].x) / 2 - r.left;
+      const cy = (a[0].y + a[1].y) / 2 - r.top;
+      const v = viewRef.current;
+      start = { dist, cx, cy, tx: v.tx, ty: v.ty, scale: v.scale };
+    };
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) {
+        drag.current = null; // cancel any single-finger drag → pinch takes over
+        setConnecting(false);
+        e.stopPropagation();
+        snapshot();
+      }
+    };
+    const move = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (start && pts.size >= 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        const a = [...pts.values()];
+        const r = vp.getBoundingClientRect();
+        const dist = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1;
+        const mx = (a[0].x + a[1].x) / 2 - r.left;
+        const my = (a[0].y + a[1].y) / 2 - r.top;
+        const scale = Math.min(4, Math.max(0.1, start.scale * (dist / start.dist)));
+        const k = scale / start.scale;
+        setView({ scale, tx: mx - (start.cx - start.tx) * k, ty: my - (start.cy - start.ty) * k });
+      }
+    };
+    const up = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) start = null;
+    };
+    vp.addEventListener('pointerdown', down, { capture: true });
+    vp.addEventListener('pointermove', move, { capture: true, passive: false });
+    vp.addEventListener('pointerup', up, { capture: true });
+    vp.addEventListener('pointercancel', up, { capture: true });
+    return () => {
+      vp.removeEventListener('pointerdown', down, { capture: true } as any);
+      vp.removeEventListener('pointermove', move, { capture: true } as any);
+      vp.removeEventListener('pointerup', up, { capture: true } as any);
+      vp.removeEventListener('pointercancel', up, { capture: true } as any);
+    };
+  }, []);
+
   // Apply a canvas state to the store (marks dirty) WITHOUT touching history.
   const applyData = useCallback(
     (next: CanvasData) => {

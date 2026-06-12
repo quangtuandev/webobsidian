@@ -1510,6 +1510,13 @@ button { font-family: inherit; }
 .canvas-toolbar-zoom { left: 12px; bottom: 12px; }
 .canvas-toolbar-add { left: 50%; bottom: 16px; transform: translateX(-50%); gap: 4px; padding: 5px; }
 .canvas-toolbar-add button { min-width: 34px; height: 34px; }
+/* Mobile: split the two bottom toolbars (zoom left, add right) so they don't overlap. */
+@media (max-width: 768px) {
+  .canvas-toolbar-zoom { left: 8px; bottom: 8px; }
+  .canvas-toolbar-add { left: auto; right: 8px; bottom: 8px; transform: none; }
+  .canvas-toolbar-add button { min-width: 40px; height: 40px; }
+  .canvas-toolbar-zoom button { min-width: 32px; height: 32px; }
+}
 .canvas-toolbar button, .canvas-ctx button {
   display: flex; align-items: center; justify-content: center;
   min-width: 28px; height: 28px; padding: 0 6px; border: 0; border-radius: var(--radius-s);

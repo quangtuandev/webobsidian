@@ -378,6 +378,13 @@ Cập nhật lần cuối: 2026-06-12 (M3.6 — Trash UI FR-1: xem/Restore/xoá 
       "New canvas" vào context menu FileTree (file/folder/root) + command palette. Typecheck web sạch.
 
 ### Nhật ký tiến độ
+- 2026-06-12 (Phase 25r — Canvas mobile: pinch-zoom + toolbar không overlap): trên điện thoại canvas không
+  pinch-zoom được (`touch-action:none` chặn gesture trình duyệt) và 2 toolbar dưới đè nhau. Fix: (1)
+  **pinch-to-zoom + 2-ngón pan** qua listener pointer **capture-phase** trên viewport (ngón thứ 2 hủy drag
+  1-ngón rồi pinch, chạy cả khi đặt trên node); 1-ngón pan vẫn dùng pointer drag cũ. (2) `@media
+  (max-width:768px)`: tách **zoom toolbar (trái-dưới)** và **add toolbar (phải-dưới)**, target chạm to hơn.
+  Smoke-test (viewport 390px, synthetic touch): pinch scale 1.5→4 và 4→0.8; 1-ngón pan Δx đúng; toolbar tách
+  2 góc; không lỗi console. Typecheck + build sạch. Deploy prod.
 - 2026-06-12 (M3.6 — Trash UI + deleteMode, theo yêu cầu người dùng): thêm setting `vault.deleteMode`
   (`trash` mặc định | `permanent`) — DELETE `/api/files/` rẽ nhánh trash vs `vault.remove()` xoá hẳn.
   Service vault: `listTrash/restoreFromTrash/deleteFromTrash/emptyTrash` (+ `pruneEmptyDirs`, guard
