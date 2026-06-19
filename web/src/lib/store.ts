@@ -124,9 +124,16 @@ interface AppState {
   bookmarks: string[];
   toggleBookmark: (path: string) => void;
 
-  /** Path of the file/folder the "Move to…" folder picker is acting on (null = closed). */
-  movePath: string | null;
-  setMovePath: (path: string | null) => void;
+  /** Path(s) the "Move to…" folder picker is acting on (null = closed). An array = bulk move. */
+  movePath: string | string[] | null;
+  setMovePath: (path: string | string[] | null) => void;
+
+  /** Multi-selected file/folder paths in the tree (Shift/Cmd-click); never persisted. */
+  selected: string[];
+  setSelected: (paths: string[]) => void;
+  /** Anchor row for Shift-click range selection. */
+  selectAnchor: string | null;
+  setSelectAnchor: (path: string | null) => void;
 
   /** File/folder copied or cut, awaiting paste (session-local, never persisted). */
   clipboard: { path: string; mode: 'copy' | 'cut' } | null;
@@ -367,6 +374,11 @@ export const useStore = create<AppState>()(
       removeRecent: (path) => set((s) => ({ recent: s.recent.filter((p) => p !== path) })),
       movePath: null,
       setMovePath: (path) => set({ movePath: path }),
+
+      selected: [],
+      setSelected: (selected) => set({ selected }),
+      selectAnchor: null,
+      setSelectAnchor: (selectAnchor) => set({ selectAnchor }),
       clipboard: null,
       setClipboard: (c) => set({ clipboard: c }),
       bookmarks: [],

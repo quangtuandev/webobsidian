@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, type TreeSort } from '../lib/store';
 import { api, type TreeNode } from '../lib/api';
-import { findNode } from '../lib/tree';
+import { findNode, pruneDescendants } from '../lib/tree';
 import { pathToUrl } from '../lib/urlsync';
 import Icon from './Icon';
 
@@ -70,6 +70,49 @@ function parentDir(path: string): string {
   return i < 0 ? '' : path.slice(0, i);
 }
 
+/** Parse the dragged path list from a drag event (multi-select aware). */
+function readDragPaths(e: React.DragEvent): string[] {
+  const multi = e.dataTransfer.getData('text/wo-paths');
+  if (multi) {
+    try {
+      const arr = JSON.parse(multi);
+      if (Array.isArray(arr)) return arr.filter((p): p is string => typeof p === 'string');
+    } catch { /* fall through to legacy single */ }
+  }
+  const single = e.dataTransfer.getData('text/wo-path');
+  return single ? [single] : [];
+}
+
+/** Move every path into targetDir ('' = vault root). Skips no-ops and self/descendant moves. */
+async function moveItemsTo(paths: string[], targetDir: string): Promise<void> {
+  const { closeTab, loadTree, setSelected, notify } = useStore.getState();
+  let moved = 0;
+  for (const from of pruneDescendants(paths)) {
+    if (!from) continue;
+    const base = from.split('/').pop()!;
+    const to = targetDir ? `${targetDir}/${base}` : base;
+    if (to === from) continue; // already there
+    if (targetDir === from || targetDir.startsWith(`${from}/`)) continue; // into self/descendant
+    try {
+      await api.rename(from, to);
+      closeTab(from);
+      moved++;
+    } catch (err: any) {
+      notify(err?.message ?? 'Move failed');
+    }
+  }
+  setSelected([]);
+  await loadTree();
+  if (moved > 1) notify(`Moved ${moved} items`);
+}
+
+/** Visible tree rows in display order — used to resolve a Shift-click range. */
+function visibleOrder(): string[] {
+  return [...document.querySelectorAll<HTMLElement>('.tree-row[data-path]')]
+    .map((el) => el.dataset.path!)
+    .filter(Boolean);
+}
+
 /**
  * Pick a name for `base` inside `targetDir` that doesn't collide with an
  * existing child — appends " copy" / " copy N" before the extension, like Obsidian.
@@ -110,10 +153,56 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
   const notify = useStore((s) => s.notify);
   const setShareDialog = useStore((s) => s.setShareDialog);
   const shares = useStore((s) => s.shares);
+  const isSelected = useStore((s) => s.selected.includes(node.path));
+  const setSelected = useStore((s) => s.setSelected);
+  const setSelectAnchor = useStore((s) => s.setSelectAnchor);
 
   const isFolder = node.type === 'folder';
   const editing = renamingPath === node.path;
   const isCut = clipboard?.mode === 'cut' && clipboard.path === node.path;
+
+  // Click selection: plain = single (+open/toggle), Cmd/Ctrl = toggle one,
+  // Shift = range from the anchor across the visible rows (like Obsidian/Finder).
+  const onRowClick = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey) {
+      const cur = useStore.getState().selected;
+      setSelected(cur.includes(node.path) ? cur.filter((p) => p !== node.path) : [...cur, node.path]);
+      setSelectAnchor(node.path);
+      return;
+    }
+    if (e.shiftKey) {
+      e.preventDefault(); // don't text-select across rows
+      const order = visibleOrder();
+      const anchor = useStore.getState().selectAnchor ?? node.path;
+      const a = order.indexOf(anchor);
+      const b = order.indexOf(node.path);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a <= b ? [a, b] : [b, a];
+        setSelected(order.slice(lo, hi + 1));
+      } else {
+        setSelected([node.path]);
+      }
+      return;
+    }
+    setSelected([node.path]);
+    setSelectAnchor(node.path);
+    if (isFolder) toggleFolder(node.path);
+    else openFile(node.path);
+  };
+
+  const doDeleteMany = async () => {
+    const paths = pruneDescendants(useStore.getState().selected);
+    if (!paths.length || !confirm(`Delete ${paths.length} item${paths.length > 1 ? 's' : ''}?`)) return;
+    let n = 0;
+    for (const p of paths) {
+      const r = await api.remove(p).catch(() => null);
+      if (r) { closeTab(p); n++; }
+    }
+    setSelected([]);
+    await loadTree();
+    notify(`Deleted ${n} item${n > 1 ? 's' : ''}`);
+  };
+  const doMoveMany = () => setMovePath(useStore.getState().selected);
 
   const doRename = () => setRenamingPath(node.path);
   const doDelete = async () => {
@@ -190,6 +279,22 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
   const onContext = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    const sel = useStore.getState().selected;
+    // Right-clicking a row that's part of a multi-selection → bulk actions.
+    if (sel.length > 1 && sel.includes(node.path)) {
+      openContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          { label: `Move ${sel.length} items to…`, onClick: doMoveMany },
+          { label: '', separator: true },
+          { label: `Delete ${sel.length} items`, danger: true, onClick: doDeleteMany },
+        ],
+      });
+      return;
+    }
+    // Right-clicking outside the selection collapses it onto this single row.
+    if (!sel.includes(node.path)) { setSelected([node.path]); setSelectAnchor(node.path); }
     const items = isFolder
       ? [
           { label: 'New note', onClick: () => newNote(node.path) },
@@ -231,31 +336,33 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
   };
 
   const onDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('text/wo-path', node.path);
+    // Drag the whole selection if this row is part of it; otherwise drag just it
+    // (and make it the selection, so the highlight matches what's being dragged).
+    const sel = useStore.getState().selected;
+    const paths = sel.includes(node.path) && sel.length > 1 ? sel : [node.path];
+    if (!sel.includes(node.path)) { setSelected([node.path]); setSelectAnchor(node.path); }
+    e.dataTransfer.setData('text/wo-paths', JSON.stringify(paths));
+    e.dataTransfer.setData('text/wo-path', node.path); // legacy single-path readers
     e.dataTransfer.effectAllowed = 'move';
   };
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDropping(false);
-    const from = e.dataTransfer.getData('text/wo-path');
     const targetDir = isFolder ? node.path : parentDir(node.path);
-    if (!from || from === targetDir) return;
-    const base = from.split('/').pop()!;
-    const to = targetDir ? `${targetDir}/${base}` : base;
-    if (to === from) return;
-    await api.rename(from, to).catch((err) => notify(err.message));
-    closeTab(from);
-    await loadTree();
+    await moveItemsTo(readDragPaths(e), targetDir);
   };
 
   if (isFolder) {
     return (
       <div className="tree-item">
         <div
-          className={`tree-row folder ${dropping ? 'drop-target' : ''}`}
+          className={`tree-row folder ${isSelected ? 'selected' : ''} ${dropping ? 'drop-target' : ''}`}
           style={isCut ? { opacity: 0.5 } : undefined}
-          onClick={() => toggleFolder(node.path)}
+          data-path={node.path}
+          draggable
+          onDragStart={onDragStart}
+          onClick={onRowClick}
           onContextMenu={onContext}
           onDragOver={(e) => { e.preventDefault(); setDropping(true); }}
           onDragLeave={() => setDropping(false)}
@@ -285,12 +392,12 @@ function Node({ node, depth }: { node: TreeNode; depth: number }) {
   return (
     <div className="tree-item">
       <div
-        className={`tree-row ${activePath === node.path ? 'active' : ''} ${dropping ? 'drop-target' : ''}`}
+        className={`tree-row ${activePath === node.path ? 'active' : ''} ${isSelected ? 'selected' : ''} ${dropping ? 'drop-target' : ''}`}
         style={isCut ? { opacity: 0.5 } : undefined}
         data-path={node.path}
         draggable
         onDragStart={onDragStart}
-        onClick={() => openFile(node.path)}
+        onClick={onRowClick}
         onContextMenu={onContext}
         // A file is a valid drop target too: dropping onto it moves the dragged
         // item into the file's parent folder (Obsidian behaviour). Without this,
@@ -406,13 +513,13 @@ export default function FileTree() {
     return () => window.removeEventListener('wo-reveal-file', onReveal);
   }, []);
 
+  const setSelected = useStore((s) => s.setSelected);
+
   const onRootDrop = async (e: React.DragEvent) => {
     e.preventDefault();
-    const from = e.dataTransfer.getData('text/wo-path');
-    if (!from || !from.includes('/')) return;
-    const base = from.split('/').pop()!;
-    await api.rename(from, base).catch((err) => notify(err.message));
-    await loadTree();
+    // Drop on the empty area = move to the vault root. Only nested items move.
+    const paths = readDragPaths(e).filter((p) => p.includes('/'));
+    if (paths.length) await moveItemsTo(paths, '');
   };
 
   // Paste into the vault root (right-click on the empty area of the file tree).
@@ -474,6 +581,8 @@ export default function FileTree() {
       onDragOver={(e) => e.preventDefault()}
       onDrop={onRootDrop}
       onContextMenu={onRootContext}
+      // Click on the empty area below the rows clears the selection.
+      onClick={(e) => { if (e.target === e.currentTarget) setSelected([]); }}
       style={{ minHeight: '100%' }}
     >
       {tree.children.map((c) => (

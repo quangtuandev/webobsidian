@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { api, type TreeNode } from '../lib/api';
+import { pruneDescendants } from '../lib/tree';
 
 /** Collect every folder path in the vault, in tree order. */
 function collectFolders(node: TreeNode | null): string[] {
@@ -36,20 +37,24 @@ export default function FolderPicker() {
   const [sel, setSel] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const from = movePath;
-  const base = from ? from.split('/').pop()! : '';
-  const currentDir = from && from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '';
+  // movePath is a single path (string) or several (array, bulk move).
+  const froms = useMemo(
+    () => (movePath == null ? [] : pruneDescendants(Array.isArray(movePath) ? movePath : [movePath])),
+    [movePath],
+  );
+  const single = froms.length === 1 ? froms[0] : null;
+  const currentDir = single && single.includes('/') ? single.slice(0, single.lastIndexOf('/')) : '';
 
   // Root + every folder, minus targets that would move a folder into itself or a
-  // descendant (and minus the file's own current folder — that move is a no-op).
+  // descendant of any source (and, for a single item, its own folder — a no-op).
   const folders = useMemo(() => {
     const all = ['', ...collectFolders(tree)];
     return all.filter((f) => {
-      if (f === currentDir) return false;
-      if (from && (f === from || f.startsWith(`${from}/`))) return false;
+      if (single !== null && f === currentDir) return false;
+      if (froms.some((src) => f === src || f.startsWith(`${src}/`))) return false;
       return true;
     });
-  }, [tree, from, currentDir]);
+  }, [tree, froms, single, currentDir]);
 
   const lc = q.trim().toLowerCase();
   const matches = useMemo(
@@ -70,21 +75,34 @@ export default function FolderPicker() {
     listRef.current?.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   }, [sel]);
 
-  if (!movePath) return null;
+  if (!movePath || !froms.length) return null;
 
   const move = async (folder: string) => {
-    const to = folder ? `${folder.replace(/\/+$/, '')}/${base}` : base;
-    const wasActive = useStore.getState().activePath === from;
+    const targetDir = folder.replace(/\/+$/, '');
+    const activePath = useStore.getState().activePath;
     setMovePath(null);
-    if (!from || to === from) return;
-    try {
-      await api.rename(from, to);
-      closeTab(from);
-      await loadTree();
-      if (wasActive) await openFile(to);
-      notify(`Moved to ${folder || 'vault root'}`);
-    } catch (e: any) {
-      notify(e?.message ?? 'Move failed');
+    let moved = 0;
+    let reopen: string | null = null;
+    for (const src of froms) {
+      const b = src.split('/').pop()!;
+      const to = targetDir ? `${targetDir}/${b}` : b;
+      if (to === src) continue; // already in the chosen folder
+      if (targetDir === src || targetDir.startsWith(`${src}/`)) continue; // into self/descendant
+      try {
+        await api.rename(src, to);
+        closeTab(src);
+        if (activePath === src) reopen = to;
+        moved++;
+      } catch (e: any) {
+        notify(e?.message ?? 'Move failed');
+      }
+    }
+    await loadTree();
+    useStore.getState().setSelected([]);
+    if (reopen) await openFile(reopen);
+    if (moved) {
+      const dest = folder || 'vault root';
+      notify(moved > 1 ? `Moved ${moved} items to ${dest}` : `Moved to ${dest}`);
     }
   };
 
@@ -109,7 +127,7 @@ export default function FolderPicker() {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <input
           className="palette-input"
-          placeholder="Type a folder"
+          placeholder={froms.length > 1 ? `Move ${froms.length} items to which folder?` : 'Type a folder'}
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
