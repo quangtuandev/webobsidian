@@ -577,6 +577,18 @@ export default function GraphView() {
     (async () => {
       const PIXI = await import('pixi.js');
       if (destroyed) return;
+      // Some hosts serve under a CSP without 'unsafe-eval'. PixiJS v8 generates
+      // shader/UBO code via `new Function()` by default, which CSP blocks
+      // ("Current environment does not allow unsafe-eval"). Importing Pixi's
+      // unsafe-eval module self-installs interpreted (no-eval) polyfills for the
+      // shader/UBO/uniform generators, so the WebGL renderer works regardless of
+      // CSP. The import runs for its side effect and must precede app.init().
+      try {
+        await import('pixi.js/unsafe-eval');
+      } catch {
+        /* older Pixi without the subpath export — ignore */
+      }
+      if (destroyed) return;
       mod.current = PIXI;
       const wrap = wrapRef.current!;
       const app = new PIXI.Application();

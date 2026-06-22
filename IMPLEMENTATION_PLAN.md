@@ -4,7 +4,7 @@
 > Quy ước: `[ ]` chưa làm · `[~]` đang làm · `[x]` xong.
 > Cập nhật file này **mỗi khi** một mục thay đổi trạng thái.
 
-Cập nhật lần cuối: 2026-06-19 (Fix: nút Sort header Files không mở menu (click mở bị chính click đó đóng ngay) + kéo-thả file thả lên file/trong folder đang mở không di chuyển — verify CDP end-to-end)
+Cập nhật lần cuối: 2026-06-22 (Fix Graph view trắng + lỗi `unsafe-eval` trên host CSP: import `pixi.js/unsafe-eval` trước `app.init()` trong `GraphView.tsx`)
 
 ---
 
@@ -100,6 +100,7 @@ Cập nhật lần cuối: 2026-06-19 (Fix: nút Sort header Files không mở m
 - [x] M12.1 Live Preview WYSIWYG (CM6): ẩn dấu định dạng, scale heading, widget wikilink/checkbox/ảnh
 - [x] M12.2 Frontmatter → Properties block trong cả Live preview (StateField) lẫn Reading
 - [x] M12.3 Embeds/transclusion `![[note]]` + ảnh `![[img]]` trong Reading
+- [x] M12.3b Embed audio/video `![[clip.mp4]]`/`![[song.mp3]]` → `<video>`/`<audio>` HTML5 (Live Preview `MediaWidget`, Reading `markdown.ts`, public share `renderhtml.ts`) + mở thẳng file media trong tree → player; binary serve qua HTTP Range (206) cho seek; MIME/extension gom về `services/mime.ts` & `lib/media.ts`
 - [x] M12.4 Context menu chuột phải thật (new/rename/delete/open-to-side/bookmark)
 - [x] M12.5 Kéo-thả di chuyển file trong tree + dán/drop ảnh → upload attachments + chèn embed
 - [x] M12.6 Quick switcher (⌘O) + command palette commands + hotkeys (⌘P/⌘O/⌘N/⌘E/⌘⇧F/⌘\\/⌘S)
@@ -404,6 +405,27 @@ Cập nhật lần cuối: 2026-06-19 (Fix: nút Sort header Files không mở m
       (`.cm-image-resize`) + `.image-lightbox*` + cursor `zoom-in`. Typecheck sạch.
 
 ### Nhật ký tiến độ
+- 2026-06-22 (Fix Graph view dưới CSP không cho `unsafe-eval`): trên host production (vd `360of.me`) Graph
+  view trắng + lỗi `Current environment does not allow unsafe-eval, please use pixi.js/unsafe-eval module`.
+  PixiJS v8 sinh code shader/UBO bằng `new Function()`, bị CSP chặn. Sửa: trong `GraphView.tsx` import
+  `pixi.js/unsafe-eval` (module tự cài polyfill không-eval) trước `app.init()`; thêm `declare module` cho
+  subpath trong `vite-env.d.ts` (Pixi không export `types` cho subpath này). Typecheck + build pass.
+- 2026-06-19 (FR-2 — Audio/Video embed phát được như Obsidian, theo yêu cầu người dùng): note `.mp4`
+  (Trilium export: frontmatter + `![[clip.mp4]]`) trước đây chỉ hiện link xanh, nay render **trình phát
+  HTML5 thật**. Sửa 3 đường render — Live Preview (`MediaWidget` trong `livePreview.ts`, là view đang
+  dùng cho cả Reading read-only), Reading/transclusion/canvas (`markdown.ts`), public share SSR
+  (`renderhtml.ts`); cả 3 thêm `<video>/<audio>/<source>` vào allowlist `rehype-sanitize` (nếu không
+  sanitizer xoá tag). Mở thẳng file media từ tree → player (`Workspace.tsx`, như ảnh). Bộ extension khớp
+  Obsidian (video `mp4/webm/ogv/mov/mkv`, audio `mp3/wav/m4a/3gp/flac/ogg/oga/opus`) gom về
+  `web/lib/media.ts` + `server/services/mime.ts`; size param `![[clip.mp4|W]]` đặt width video.
+  **Mấu chốt:** route serve binary (`GET /api/files/content` + raw share) đổi từ `readFileBuffer`→`res.send`
+  (đọc cả file vào RAM, không seek) sang **stream + HTTP Range** (`services/httpfile.ts` →
+  `sendFileWithRange`): trả 206 Partial Content nên scrub/seek video & Safari phát được. Verify thật:
+  login `access` → `GET …/8257903_hd (2).mp4` (resolve basename từ `Attachments/`, 17MB) trả 206
+  (`Content-Range: bytes 0-1023/17758055`, `video/mp4`, `Accept-Ranges: bytes`), full GET 200, range
+  vô lệ 416; sanitizer giữ nguyên `<video>/<audio>` (test `renderNoteHtml`). Visual screenshot trong app
+  bị chặn (profile Chrome debug đang bị instance khác khoá — không tự ý kill) → xác minh qua bundle có
+  `cm-embed-video`/`media-embed` + hợp đồng server/sanitizer.
 - 2026-06-19 (Fix 2 bug Files panel — verify bằng Chrome DevTools end-to-end trên vault test):
   **(1) Nút Sort không hoạt động:** menu sort mở bằng **click trái** bị đóng ngay lập tức bởi chính cú click đó.
   `ContextMenu` gắn listener `window 'click'` để đóng khi click ra ngoài; với click trái, sau khi React commit effect,
