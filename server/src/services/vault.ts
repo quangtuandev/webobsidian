@@ -404,7 +404,10 @@ export async function listMarkdownFiles(): Promise<string[]> {
       return;
     }
     for (const e of entries) {
-      if (IGNORED.has(e.name)) continue;
+      // Skip dotfiles/dot-dirs (`.trash`, `.obsidian`, …) like the tree view and
+      // file index do — a note moved to `.trash` must not stay a live link target
+      // (and would otherwise shadow a real file with the same basename).
+      if (IGNORED.has(e.name) || e.name.startsWith('.')) continue;
       const abs = path.join(dir, e.name);
       if (e.isDirectory()) await walk(abs);
       else if (e.isFile() && /\.(md|markdown)$/i.test(e.name)) out.push(toRel(root, abs));

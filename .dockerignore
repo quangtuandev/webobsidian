@@ -8,3 +8,9 @@ data
 *.log
 .DS_Store
 sample-vault
+# The vault is bind-mounted at runtime (VAULT_HOST_PATH) — never bake the
+# multi-GB obsvault LFS clone into the build context, or `COPY . .` crawls.
+obsvault
+*.tsbuildinfo
+desktop/dist
+desktop/release
