@@ -1,6 +1,5 @@
 services:
   webobsidian:
-    build: .
     image: ${DOCKER_IMAGE:-ghcr.io/quangtuandev/webobsidian:latest}
     container_name: webobsidian
     restart: unless-stopped
