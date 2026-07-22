@@ -69,7 +69,23 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             echo "🚀 Deploying latest WebObsidian to VPS..."
-            cd ${{ secrets.VPS_DEPLOY_PATH || '~/webobsidian' }}
+            DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then
+              DEPLOY_PATH="/opt/webobsidian"
+            fi
+            mkdir -p "$DEPLOY_PATH"
+            cd "$DEPLOY_PATH"
+
+            if [ ! -f docker-compose.yml ]; then
+              echo "📥 Fetching docker-compose.yml from repository..."
+              curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.yml -o docker-compose.yml
+            fi
+
+            if [ ! -f .env ]; then
+              echo "📥 Fetching .env.example as initial .env..."
+              curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/.env.example -o .env
+            fi
+
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
