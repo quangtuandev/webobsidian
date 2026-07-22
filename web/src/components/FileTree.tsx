@@ -33,7 +33,13 @@ function RenameInput({ node, onDone }: { node: TreeNode; onDone: () => void }) {
     if (to === node.path) return;
     try {
       await api.rename(node.path, to);
-      closeTab(node.path);
+      const { tabs, activePath, recent, bookmarks } = useStore.getState();
+      const cleanTitle = name.replace(/\.(md|markdown)$/, '');
+      const nextTabs = tabs.map((t) => (t.path === node.path ? { path: to, title: cleanTitle } : t));
+      const nextActive = activePath === node.path ? to : activePath;
+      const nextRecent = recent.map((p) => (p === node.path ? to : p));
+      const nextBookmarks = bookmarks.map((p) => (p === node.path ? to : p));
+      useStore.setState({ tabs: nextTabs, activePath: nextActive, recent: nextRecent, bookmarks: nextBookmarks });
     } catch (e: any) {
       notify(e?.message ?? 'Rename failed');
     }

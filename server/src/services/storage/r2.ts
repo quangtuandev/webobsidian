@@ -223,7 +223,10 @@ export class R2StorageProvider implements IStorageProvider {
   }
 
   async rename(fromRel: string, toRel: string): Promise<void> {
-    await this.copy(fromRel, toRel);
+    const created = await this.copy(fromRel, toRel);
+    if (created.length === 0 && !(await this.exists(toRel))) {
+      throw new Error(`Failed to copy file from ${fromRel} to ${toRel}`);
+    }
     await this.remove(fromRel);
   }
 
@@ -238,7 +241,7 @@ export class R2StorageProvider implements IStorageProvider {
       await client.send(
         new CopyObjectCommand({
           Bucket: bucket,
-          CopySource: `${bucket}/${encodeURIComponent(srcKey)}`,
+          CopySource: `${bucket}/${encodeURI(srcKey)}`,
           Key: destKey,
         }),
       );
@@ -259,7 +262,7 @@ export class R2StorageProvider implements IStorageProvider {
             await client.send(
               new CopyObjectCommand({
                 Bucket: bucket,
-                CopySource: `${bucket}/${encodeURIComponent(item.Key)}`,
+                CopySource: `${bucket}/${encodeURI(item.Key)}`,
                 Key: targetKey,
               }),
             );
