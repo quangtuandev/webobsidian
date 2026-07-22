@@ -21,6 +21,16 @@ export interface RuntimeConfig {
    * value. Set `TRUST_PROXY=false` for a directly-exposed instance with no proxy.
    */
   trustProxy: boolean | number | string;
+  /** Storage driver type: 'local' (default) or 'r2'. */
+  storageProvider: 'local' | 'r2';
+  r2: {
+    accountId: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    bucketName: string;
+    publicUrl: string;
+    endpoint: string;
+  };
 }
 
 function resolveRoots(): string[] {
@@ -54,6 +64,9 @@ function resolveTrustProxy(): boolean | number | string {
   return raw;
 }
 
+const r2AccountId = process.env.R2_ACCOUNT_ID?.trim() || '';
+const r2Endpoint = process.env.R2_ENDPOINT?.trim() || (r2AccountId ? `https://${r2AccountId}.r2.cloudflarestorage.com` : '');
+
 export const config: RuntimeConfig = {
   port: Number(process.env.PORT ?? 8787),
   host: process.env.HOST ?? '0.0.0.0',
@@ -63,6 +76,15 @@ export const config: RuntimeConfig = {
   initialPassword: process.env.WEBOBSIDIAN_PASSWORD || undefined,
   isProd: process.env.NODE_ENV === 'production',
   trustProxy: resolveTrustProxy(),
+  storageProvider: (process.env.STORAGE_PROVIDER?.trim().toLowerCase() === 'r2' ? 'r2' : 'local'),
+  r2: {
+    accountId: r2AccountId,
+    accessKeyId: process.env.R2_ACCESS_KEY_ID?.trim() || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY?.trim() || '',
+    bucketName: process.env.R2_BUCKET_NAME?.trim() || '',
+    publicUrl: process.env.R2_PUBLIC_URL?.trim() || '',
+    endpoint: r2Endpoint,
+  },
 };
 
 export const SETTINGS_FILE = path.join(config.dataDir, 'settings.json');

@@ -73,6 +73,17 @@ const SettingsSchema = z.object({
       defaultView: z.enum(['live', 'source', 'reading']).default('live'),
     })
     .default({}),
+  storage: z
+    .object({
+      provider: z.enum(['local', 'r2']).default('local'),
+      r2AccountId: z.string().default(''),
+      r2AccessKeyId: z.string().default(''),
+      r2SecretAccessKey: z.string().default(''),
+      r2BucketName: z.string().default(''),
+      r2PublicUrl: z.string().default(''),
+      r2Endpoint: z.string().default(''),
+    })
+    .default({}),
   plugins: z
     .object({
       enabled: z.array(z.string()).default([]),
@@ -95,6 +106,13 @@ function defaults(): Settings {
   base.vault.allowedRoots = config.allowedRoots.length
     ? config.allowedRoots
     : [path.dirname(config.defaultVaultPath), config.defaultVaultPath];
+  base.storage.provider = config.storageProvider;
+  base.storage.r2AccountId = config.r2.accountId;
+  base.storage.r2AccessKeyId = config.r2.accessKeyId;
+  base.storage.r2SecretAccessKey = config.r2.secretAccessKey;
+  base.storage.r2BucketName = config.r2.bucketName;
+  base.storage.r2PublicUrl = config.r2.publicUrl;
+  base.storage.r2Endpoint = config.r2.endpoint;
   return base;
 }
 
@@ -133,6 +151,18 @@ async function persist(s: Settings): Promise<void> {
     /* no previous file */
   }
   await fs.rename(tmp, SETTINGS_FILE);
+
+  if (s.storage?.provider === 'r2') {
+    void (async () => {
+      try {
+        const { R2StorageProvider } = await import('./storage/r2.js');
+        const r2 = new R2StorageProvider();
+        await r2.writeFileText('.system/settings.json', json);
+      } catch {
+        /* ignore non-blocking background backup errors */
+      }
+    })();
+  }
 }
 
 export async function loadSettings(): Promise<Settings> {
