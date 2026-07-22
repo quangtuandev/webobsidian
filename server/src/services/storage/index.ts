@@ -7,8 +7,10 @@ let localProviderInstance: LocalStorageProvider | null = null;
 let r2ProviderInstance: R2StorageProvider | null = null;
 
 export async function getStorageProvider(): Promise<IStorageProvider> {
-  const settings = await getSettings();
-  const providerType = settings.storage?.provider || 'local';
+  const envProvider = process.env.STORAGE_PROVIDER?.trim().toLowerCase();
+  const providerType = (envProvider === 'r2' || envProvider === 'local')
+    ? envProvider
+    : ((await getSettings()).storage?.provider || 'local');
 
   if (providerType === 'r2') {
     if (!r2ProviderInstance) {

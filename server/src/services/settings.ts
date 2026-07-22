@@ -188,6 +188,15 @@ export async function loadSettings(): Promise<Settings> {
     }
     // Heal older files whose allowedRoots predate the current vault path.
     if (ensureVaultBrowsable(parsed)) dirty = true;
+
+    // Sync STORAGE_PROVIDER env var into settings if explicitly set
+    if (process.env.STORAGE_PROVIDER) {
+      const envProvider = process.env.STORAGE_PROVIDER.trim().toLowerCase() === 'r2' ? 'r2' : 'local';
+      if (parsed.storage.provider !== envProvider) {
+        parsed.storage.provider = envProvider;
+        dirty = true;
+      }
+    }
     cache = parsed;
     if (dirty) await persist(cache);
   } catch {
